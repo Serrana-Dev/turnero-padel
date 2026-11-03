@@ -1,0 +1,761 @@
+/* Piezas que usan la web y el panel: la cancha dibujada, ligas y torneos, las placas y el diálogo. */
+:root {
+  --c-tinta: #0d2347;
+  --c-gris: #536077;
+  --c-linea: #dde3eb;
+  --c-suave: #f1f4f8;
+  --c-azul: #1f5fd6;
+  --c-azul-claro: #e7eefb;
+  --c-verde: #12804a;
+  --c-noche: #0a1d42;
+  --c-pelota: #e2f24b;
+  --c-piso: #2f6fd6;
+  --c-piso-ocupado: #c9d2de;
+}
+
+/* ——— La cancha ——— */
+.cancha-dibujo {
+  position: relative;
+  aspect-ratio: 2 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cancha-dibujo svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cancha-piso {
+  fill: var(--c-piso);
+}
+.cancha-linea {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.85);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.cancha-red {
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
+}
+.cancha-vidrio {
+  stroke: rgb(255 255 255 / 0.55);
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+.cancha-dibujo.ocupada .cancha-piso {
+  fill: var(--c-piso-ocupado);
+}
+.cancha-dibujo.ocupada .cancha-linea,
+.cancha-dibujo.ocupada .cancha-red {
+  stroke: rgb(255 255 255 / 0.7);
+}
+.cancha-contenido {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  text-align: center;
+}
+.cancha-dibujo.ocupada .cancha-contenido {
+  color: #6b778b;
+}
+
+/* ——— Diálogo ——— */
+.dialogo {
+  border: 0;
+  border-radius: 16px;
+  padding: 0;
+  color: var(--c-tinta);
+  font-family: 'Barlow', system-ui, sans-serif;
+  font-size: 16px;
+  max-height: calc(100vh - 32px);
+  box-shadow: 0 24px 64px rgb(13 35 71 / 0.25);
+  overscroll-behavior: contain;
+}
+.dialogo::backdrop {
+  background: rgb(13 35 71 / 0.45);
+}
+.dialogo[open] {
+  animation: dialogo 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes dialogo {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.dialogo-cuerpo {
+  padding: 18px 20px 22px;
+}
+.dialogo-cabeza {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.dialogo-cabeza h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+.dialogo .btn-icono {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--c-suave);
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--c-tinta);
+}
+@media (max-width: 600px) {
+  .dialogo {
+    width: 100vw !important;
+    max-width: 100vw;
+    margin: auto 0 0;
+    border-radius: 16px 16px 0 0;
+    max-height: 92vh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialogo[open] {
+    animation: none;
+  }
+}
+
+/* ——— Ligas y torneos ——— */
+.comp {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.comp .oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.comp-barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.comp-pestanas {
+  display: inline-flex;
+  padding: 4px;
+  gap: 2px;
+  border-radius: 12px;
+  background: var(--c-noche);
+}
+.comp-pestanas button {
+  min-height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: #b9c6e0;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms;
+}
+.comp-pestanas button.activa {
+  background: var(--c-pelota);
+  color: var(--c-noche);
+}
+.comp-boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--c-linea);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--c-tinta);
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: transform 150ms, background-color 150ms;
+}
+.comp-boton:active {
+  transform: scale(0.97);
+}
+.comp-boton:hover {
+  border-color: var(--c-tinta);
+}
+.comp-boton-lleno,
+.comp-boton-compartir {
+  background: var(--c-azul);
+  border-color: var(--c-azul);
+  color: #fff;
+}
+.comp-boton-lleno:hover,
+.comp-boton-compartir:hover {
+  background: #1a4fb4;
+  border-color: #1a4fb4;
+}
+.comp-boton-ancho {
+  width: 100%;
+  min-height: 50px;
+}
+
+/* Fechas de la liga */
+.comp-rondas {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.comp-rondas button {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--c-linea);
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  color: var(--c-tinta);
+  cursor: pointer;
+  line-height: 1.1;
+}
+.comp-rondas button strong {
+  font-size: 22px;
+  font-weight: 800;
+  font-style: italic;
+}
+.comp-rondas button span {
+  font-size: 12px;
+  color: var(--c-gris);
+}
+.comp-rondas button.jugada {
+  border-color: transparent;
+  background: var(--c-azul-claro);
+}
+.comp-rondas button.activa {
+  border-color: var(--c-noche);
+  background: var(--c-noche);
+  color: #fff;
+}
+.comp-rondas button.activa span {
+  color: var(--c-pelota);
+}
+.comp-subtitulo {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  font-style: italic;
+}
+.comp-subtitulo span {
+  font-size: 16px;
+  font-weight: 500;
+  font-style: normal;
+  color: var(--c-gris);
+}
+
+/* Partidos con marcador */
+.comp-partidos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.comp-partido {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 0 var(--c-linea), 0 6px 18px rgb(13 35 71 / 0.06);
+}
+.comp-partido-cuando {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--c-gris);
+}
+.comp-partido-cuando strong {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--c-noche);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.comp-pendiente {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--c-azul);
+}
+.comp-marcador {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.comp-lado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  font-size: 16px;
+}
+.comp-nombre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comp-lado.gana .comp-nombre {
+  font-weight: 800;
+}
+.comp-lado.gana .comp-nombre::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--c-pelota);
+  box-shadow: 0 0 0 2px var(--c-tinta);
+  vertical-align: 2px;
+}
+.comp-lado.pierde {
+  color: var(--c-gris);
+}
+.comp-lado.falta .comp-nombre {
+  color: var(--c-gris);
+  font-style: italic;
+}
+.comp-games {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.comp-games b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--c-suave);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.comp-games b.set-gana {
+  background: var(--c-noche);
+  color: #fff;
+  font-weight: 800;
+}
+.comp-cargar-abrir {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-azul);
+  cursor: pointer;
+}
+.comp-cargar {
+  display: flex;
+  gap: 6px;
+}
+.comp-cargar input {
+  width: 130px;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--c-linea);
+  border-radius: 8px;
+  font: inherit;
+}
+
+/* Tabla de posiciones */
+.comp-tabla-marco {
+  overflow-x: auto;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 0 var(--c-linea), 0 6px 18px rgb(13 35 71 / 0.06);
+}
+.comp-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.comp-tabla th {
+  padding: 12px 10px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b9c6e0;
+  background: var(--c-noche);
+}
+.comp-tabla td {
+  padding: 10px;
+  border-top: 1px solid var(--c-linea);
+}
+.comp-tabla .num {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+.comp-tabla td:first-child,
+.comp-tabla th:first-child {
+  padding-left: 14px;
+}
+.comp-tabla td:last-child,
+.comp-tabla th:last-child {
+  padding-right: 16px;
+}
+.comp-tabla td:last-child strong {
+  font-size: 18px;
+  font-weight: 800;
+}
+.comp-tabla-pareja {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.comp-puesto {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-weight: 800;
+}
+.comp-tabla tr.primero td {
+  background: #fbfde6;
+}
+.comp-tabla tr.primero .comp-puesto {
+  background: var(--c-pelota);
+  color: var(--c-noche);
+  box-shadow: inset 0 0 0 2px var(--c-noche);
+}
+.comp-tabla tr.clasifica .comp-puesto {
+  background: var(--c-azul);
+  color: #fff;
+}
+.comp-tabla .ultimos {
+  width: 1%;
+  white-space: nowrap;
+}
+.comp-racha {
+  display: inline-flex;
+  gap: 3px;
+}
+.comp-racha i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+}
+.comp-racha i.g {
+  background: #19a35b;
+  color: #fff;
+}
+.comp-racha i.p {
+  background: #e3e8ef;
+  color: var(--c-gris);
+}
+.comp-nota {
+  margin: 0;
+  font-size: 14px;
+  color: var(--c-gris);
+}
+
+/* Zonas */
+.comp-zonas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 28px 20px;
+}
+.comp-zona {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comp-zona .comp-partidos {
+  grid-template-columns: 1fr;
+}
+.comp-zonas .comp-nota {
+  grid-column: 1 / -1;
+}
+.comp-zona-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  font-style: italic;
+}
+.comp-zona-titulo span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--c-azul);
+  color: #fff;
+  font-style: normal;
+}
+
+/* El cuadro con sus líneas */
+.llave-marco {
+  overflow-x: auto;
+  padding: 20px 20px 24px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgb(31 95 214 / 0.45), transparent 60%),
+    var(--c-noche);
+  color: #fff;
+  overscroll-behavior-x: contain;
+}
+.llave-marco:focus-visible {
+  outline: 3px solid var(--c-pelota);
+}
+.llave {
+  position: relative;
+  margin: 0 auto;
+}
+.llave-lineas {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.llave-lineas path {
+  fill: none;
+  stroke: rgb(185 198 224 / 0.45);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.llave-lineas path.ruta {
+  stroke: var(--c-pelota);
+  stroke-width: 3;
+}
+.llave-ronda {
+  position: absolute;
+  top: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #b9c6e0;
+}
+.llave-cruce {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px 8px;
+  border-radius: 12px;
+  background: #132f63;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+.llave-cuando {
+  margin: 0;
+  font-size: 12px;
+  color: #8ea2c8;
+}
+.llave-cruce .comp-lado {
+  min-height: 28px;
+  font-size: 15px;
+}
+.llave-cruce .comp-lado.pierde,
+.llave-cruce .comp-lado.falta .comp-nombre {
+  color: #8ea2c8;
+}
+.llave-cruce .comp-lado.gana .comp-nombre::after {
+  box-shadow: none;
+}
+.llave-cruce .comp-games b {
+  width: 22px;
+  height: 22px;
+  background: rgb(255 255 255 / 0.08);
+  font-size: 14px;
+}
+.llave-cruce .comp-games b.set-gana {
+  background: var(--c-pelota);
+  color: var(--c-noche);
+}
+.llave-copa {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 0 0 2px rgb(185 198 224 / 0.35);
+  text-align: center;
+  color: #b9c6e0;
+}
+.llave-copa strong {
+  font-size: 17px;
+  line-height: 1.15;
+}
+.llave-copa span {
+  font-size: 13px;
+}
+.llave-copa.hay {
+  background: var(--c-pelota);
+  box-shadow: none;
+  color: var(--c-noche);
+}
+.comp-deslizar {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .comp-zonas {
+    grid-template-columns: 1fr;
+  }
+  .comp-tabla .ancho {
+    display: none;
+  }
+  .comp-partidos {
+    grid-template-columns: 1fr;
+  }
+  .llave-marco {
+    margin: 0 -16px;
+    padding: 18px 16px 20px;
+    border-radius: 0;
+  }
+  .comp-deslizar {
+    display: block;
+    margin-bottom: -6px;
+  }
+}
+
+/* ——— Placas ——— */
+.afiche {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+.afiche-vista {
+  max-height: 70vh;
+  margin: 0 auto;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--c-suave);
+}
+.afiche-vista canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.afiche-opciones {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.afiche-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-weight: 600;
+  font-size: 15px;
+}
+.afiche-campo legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.afiche-campo select {
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--c-linea);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+  color: var(--c-tinta);
+}
+.afiche-estilos {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.afiche-estilos button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-gris);
+  cursor: pointer;
+}
+.afiche-muestra {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  outline: 1px solid var(--c-linea);
+}
+.afiche-estilos button.activo {
+  color: var(--c-tinta);
+  font-weight: 700;
+}
+.afiche-estilos button.activo .afiche-muestra {
+  outline: 3px solid var(--c-azul);
+  outline-offset: 2px;
+}
+.afiche-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-width: 700px) {
+  .afiche {
+    grid-template-columns: 1fr;
+  }
+  .afiche-vista {
+    width: min(100%, 300px);
+  }
+}
