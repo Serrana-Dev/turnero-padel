@@ -16,7 +16,7 @@ const whatsapp = `https://wa.me/54${negocio.whatsapp.replace(/\D/g, '')}`
 function BarraDemo() {
   return (
     <div className="barra-demo">
-      <p>Demo de {PRODUCTO} para complejos de pádel. El club es inventado y las reservas son de prueba.</p>
+      <p>Demo<span className="demo-detalle"> de {PRODUCTO} para complejos de pádel. El club es inventado y las reservas son de prueba.</span></p>
       <Link to="/admin">Ver el panel del club</Link>
     </div>
   )

@@ -1644,3 +1644,43 @@
 .superior .boton {
   color: var(--text);
 }
+
+/* ——— Teléfono: controles de al menos 44 px para el dedo y campos de 16 px (así Safari no hace zoom) ——— */
+@media (max-width: 860px) {
+  .admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .menu a,
+  .menu-secundario,
+  .boton,
+  .boton-chico,
+  .segmentos button,
+  .pestanas-admin button,
+  .select-chico,
+  .alcance select,
+  .buscador input,
+  .barra-herramientas input {
+    min-height: 44px;
+  }
+  .btn-icono {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .boton-chico {
+    font-size: 14px;
+  }
+  .admin input,
+  .admin select,
+  .admin textarea {
+    font-size: 16px;
+  }
+  .superior-texto {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .superior-detalle {
+    display: none;
+  }
+}

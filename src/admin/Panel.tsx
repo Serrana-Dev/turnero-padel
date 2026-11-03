@@ -57,7 +57,7 @@ export function Layout() {
       </aside>
       <header className="superior">
         <button className="btn-icono solo-telefono" onClick={() => setAbierto(!abierto)} aria-label="Menú"><Menu size={20} /></button>
-        <p className="superior-texto">{capital(fechaLarga(hoyClave()))}, abierto de 8:00 a 00:30</p>
+        <p className="superior-texto">{capital(fechaLarga(hoyClave()))}<span className="superior-detalle">, abierto de 8:00 a 00:30</span></p>
         <Link to="/" className="boton boton-chico">Reservar como cliente</Link>
       </header>
       <main className="hoja-admin">

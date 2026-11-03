@@ -1101,3 +1101,29 @@
     transition: none;
   }
 }
+
+/* ——— Teléfono: campos de 16 px (así Safari no hace zoom), aviso de demo en una línea y links del pie fáciles de tocar ——— */
+@media (max-width: 600px) {
+  .sitio input,
+  .sitio select,
+  .sitio textarea {
+    font-size: 16px;
+  }
+  .barra-demo {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 12px;
+  }
+  .barra-demo p {
+    margin: 0;
+  }
+  .demo-detalle {
+    display: none;
+  }
+  .pie p:not(.creditos) a,
+  .pie li a {
+    display: inline-block;
+    padding-block: 10px;
+  }
+}
