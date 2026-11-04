@@ -33,7 +33,7 @@ export function Fijos() {
       {e.solicitudes.length > 0 && (
         <section className="tarjeta tarjeta-destacada">
           <div className="tarjeta-cabeza"><h2>Pedidos desde la web</h2></div>
-          <table className="tabla">
+          <table className="tabla tabla-tarjetas tabla-pedidos">
             <thead><tr><th>Quién</th><th>Quiere</th><th>Cancha</th><th /></tr></thead>
             <tbody>
               {e.solicitudes.map((s) => {
@@ -66,7 +66,7 @@ export function Fijos() {
         </section>
       )}
 
-      <table className="tabla">
+      <table className="tabla tabla-tarjetas tabla-fijos">
         <thead><tr><th>Día</th><th className="num">Hora</th><th>Cancha</th><th>Titular</th><th>Desde</th><th /></tr></thead>
         <tbody>
           {ordenados.map((f) => (
