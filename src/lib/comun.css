@@ -759,3 +759,157 @@
     width: min(100%, 300px);
   }
 }
+
+/* ——— Tabla de la liga: zona de clasificación, quién subió y quién bajó, puntos bien a la vista ——— */
+.comp-tabla tbody tr {
+  transition: background-color 150ms;
+}
+.comp-tabla tr.clasifica td:first-child {
+  box-shadow: inset 4px 0 0 var(--c-azul);
+}
+.comp-tabla tr.corte td {
+  border-bottom: 2px dashed color-mix(in srgb, var(--c-azul) 45%, transparent);
+}
+.comp-tabla tr.clasifica .comp-puesto {
+  background: var(--c-azul);
+  color: #fff;
+}
+.comp-tabla tr.primero .comp-puesto {
+  background: var(--c-pelota);
+  color: var(--c-noche);
+  box-shadow: inset 0 0 0 2px var(--c-noche);
+}
+.comp-tabla-pareja {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.comp-pareja-nombre {
+  min-width: 0;
+}
+.comp-mov {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  padding: 1px 5px 1px 3px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.comp-mov.sube {
+  background: #e3f6ea;
+  color: #128048;
+}
+.comp-mov.baja {
+  background: #fdeceb;
+  color: #c23a2f;
+}
+.comp-dif {
+  font-weight: 700;
+  color: var(--c-gris);
+}
+.comp-dif.mas {
+  color: #128048;
+}
+.comp-dif.menos {
+  color: #c23a2f;
+}
+.comp-pts {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--c-noche);
+  color: #fff;
+  font-size: 16px !important;
+}
+.comp-tabla tr.primero .comp-pts {
+  background: var(--c-pelota);
+  color: var(--c-noche);
+}
+.comp-leyenda {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--c-linea);
+  font-size: 13px;
+  color: var(--c-gris);
+}
+.comp-leyenda i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--c-azul);
+}
+
+/* ——— Cuadro: botones para saltar de ronda ——— */
+.llave-rondas {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: -6px;
+}
+.llave-rondas button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--c-linea);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-tinta);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.llave-rondas button svg {
+  color: #128048;
+}
+.llave-rondas button.actual {
+  background: var(--c-noche);
+  box-shadow: none;
+  color: #fff;
+}
+.llave-marco {
+  scroll-behavior: smooth;
+}
+
+@media (max-width: 480px) {
+  .comp-tabla th,
+  .comp-tabla td {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+  .comp-tabla-pareja {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+  .comp-racha i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    font-size: 0;
+  }
+  .comp-pts {
+    min-width: 32px;
+    height: 28px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .llave-marco {
+    scroll-behavior: auto;
+  }
+}

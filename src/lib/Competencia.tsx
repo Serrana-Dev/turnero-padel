@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Share2, Trophy } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Share2, Trophy } from 'lucide-react'
 import { negocio } from '../config/negocio'
 import { compartirImagen, descargar, dibujarAfiche, estilos, medidas, type Contenido, type Formato } from './afiche'
 import {
@@ -35,6 +35,14 @@ export function estadoCompetencia(c: Competencia) {
 /** Cuántos partidos se jugaron de cuántos: la barra de avance de la competencia. */
 export function avance(c: Competencia) {
   return { jugados: c.partidos.filter((p) => p.sets).length, total: c.partidos.length }
+}
+
+/** El puesto de cada pareja antes de la última fecha jugada. */
+function antesDeLaUltima(c: Competencia) {
+  const jugadas = rondas(c).filter((r) => r.partidos.some((p) => p.sets))
+  if (jugadas.length < 2) return undefined
+  const ultima = jugadas[jugadas.length - 1].ronda
+  return Object.fromEntries(tabla(c.parejas, c.partidos.filter((p) => p.ronda !== ultima)).map((f, i) => [f.pareja.id, i]))
 }
 
 /** Los últimos resultados de una pareja, el más reciente al final: G o P. */
@@ -121,7 +129,21 @@ function PartidoFila({ c, p, editable, guardar }: { c: Competencia; p: Partido; 
   )
 }
 
-function TablaPosiciones({ filas, partidos, clasifican = 0 }: { filas: ReturnType<typeof tabla>; partidos: Partido[]; clasifican?: number }) {
+function TablaPosiciones({
+  filas,
+  partidos,
+  clasifican = 0,
+  antes,
+  zona,
+}: {
+  filas: ReturnType<typeof tabla>
+  partidos: Partido[]
+  clasifican?: number
+  /** Puesto de cada pareja en la fecha anterior, para mostrar si subió o bajó. */
+  antes?: Record<string, number>
+  /** Qué ganan los que clasifican, para la leyenda. */
+  zona?: string
+}) {
   return (
     <div className="comp-tabla-marco">
       <table className="comp-tabla">
@@ -130,54 +152,88 @@ function TablaPosiciones({ filas, partidos, clasifican = 0 }: { filas: ReturnTyp
             <th className="num">#</th>
             <th>Pareja</th>
             <th className="num">PJ</th>
-            <th className="num">PG</th>
-            <th className="num ancho">Sets</th>
+            <th className="num ancho">PG</th>
+            <th className="num" title="Diferencia de sets">Dif</th>
             <th className="num ancho">Games</th>
             <th className="ultimos">Últimos</th>
             <th className="num">Pts</th>
           </tr>
         </thead>
         <tbody>
-          {filas.map((f, i) => (
-            <tr key={f.pareja.id} className={i === 0 && f.pj ? 'primero' : i < clasifican ? 'clasifica' : ''}>
-              <td className="num">
-                <span className="comp-puesto">{i + 1}</span>
-              </td>
-              <td className="comp-tabla-pareja">{f.pareja.nombre}</td>
-              <td className="num">{f.pj}</td>
-              <td className="num">{f.pg}</td>
-              <td className="num ancho">{f.sf}-{f.sc}</td>
-              <td className="num ancho">{f.gf}-{f.gc}</td>
-              <td className="ultimos">
-                <span className="comp-racha" aria-label={`Últimos: ${racha(f.pareja.id, partidos).join(', ') || 'sin partidos'}`}>
-                  {racha(f.pareja.id, partidos).map((x, k) => (
-                    <i key={k} className={x === 'G' ? 'g' : 'p'}>
-                      {x}
-                    </i>
-                  ))}
-                </span>
-              </td>
-              <td className="num">
-                <strong>{f.pts}</strong>
-              </td>
-            </tr>
-          ))}
+          {filas.map((f, i) => {
+            const dif = f.sf - f.sc
+            const mov = antes && antes[f.pareja.id] !== undefined ? antes[f.pareja.id] - i : 0
+            return (
+              <tr key={f.pareja.id} className={`${i === 0 && f.pj ? 'primero' : ''} ${i < clasifican ? 'clasifica' : ''} ${i === clasifican - 1 ? 'corte' : ''}`}>
+                <td className="num">
+                  <span className="comp-puesto">{i + 1}</span>
+                </td>
+                <td className="comp-tabla-pareja">
+                  <span className="comp-pareja-nombre">{f.pareja.nombre}</span>
+                  {mov !== 0 && (
+                    <span className={`comp-mov ${mov > 0 ? 'sube' : 'baja'}`} aria-label={mov > 0 ? `Subió ${mov}` : `Bajó ${-mov}`}>
+                      {mov > 0 ? <ArrowUp size={11} strokeWidth={3} aria-hidden="true" /> : <ArrowDown size={11} strokeWidth={3} aria-hidden="true" />}
+                      {Math.abs(mov)}
+                    </span>
+                  )}
+                </td>
+                <td className="num">{f.pj}</td>
+                <td className="num ancho">{f.pg}</td>
+                <td className={`num comp-dif ${dif > 0 ? 'mas' : dif < 0 ? 'menos' : ''}`}>
+                  {dif > 0 ? `+${dif}` : dif}
+                </td>
+                <td className="num ancho">
+                  {f.gf}-{f.gc}
+                </td>
+                <td className="ultimos">
+                  <span className="comp-racha" aria-label={`Últimos: ${racha(f.pareja.id, partidos).join(', ') || 'sin partidos'}`}>
+                    {racha(f.pareja.id, partidos).map((x, k) => (
+                      <i key={k} className={x === 'G' ? 'g' : 'p'}>
+                        {x}
+                      </i>
+                    ))}
+                  </span>
+                </td>
+                <td className="num">
+                  <strong className="comp-pts">{f.pts}</strong>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
+      {zona && clasifican > 0 && (
+        <p className="comp-leyenda">
+          <i aria-hidden="true" /> {zona}
+        </p>
+      )}
     </div>
   )
 }
 
-// Medidas del cuadro, en píxeles
-const CRUCE = 236
-const ALTO = 92
-const FILA = 112
-const HUECO = 40
-const TITULO = 40
-const PODIO = 184
+// Medidas del cuadro, en píxeles: en el celular más chico, para que entren casi dos rondas a la vista
+const tamañoLlave = {
+  grande: { CRUCE: 236, ALTO: 92, FILA: 112, HUECO: 40, TITULO: 40, PODIO: 184 },
+  chico: { CRUCE: 214, ALTO: 86, FILA: 100, HUECO: 22, TITULO: 36, PODIO: 150 },
+}
+
+function useAngosto() {
+  const consulta = '(max-width: 700px)'
+  const [angosto, setAngosto] = useState(() => matchMedia(consulta).matches)
+  useEffect(() => {
+    const m = matchMedia(consulta)
+    const cambiar = () => setAngosto(m.matches)
+    m.addEventListener('change', cambiar)
+    return () => m.removeEventListener('change', cambiar)
+  }, [])
+  return angosto
+}
 
 /** El cuadro de eliminación con las líneas que llevan cada cruce al siguiente, hasta la copa. */
 function Llave({ c, rs, campeones }: { c: Competencia; rs: { ronda: string; partidos: Partido[] }[]; campeones: Pareja | null }) {
+  const { CRUCE, ALTO, FILA, HUECO, TITULO, PODIO } = tamañoLlave[useAngosto() ? 'chico' : 'grande']
+  const marco = useRef<HTMLDivElement>(null)
+  const actual = rs.findIndex((r) => r.partidos.some((p) => !p.sets))
   const x = (k: number) => k * (CRUCE + HUECO)
   const y = (k: number, i: number) => TITULO + (i + 0.5) * FILA * 2 ** k
   const ancho = x(rs.length) + PODIO
@@ -196,40 +252,70 @@ function Llave({ c, rs, campeones }: { c: Competencia; rs: { ronda: string; part
     }),
   )
   lineas.sort((a, b) => Number(a.ruta) - Number(b.ruta))
+  const irA = (k: number) => {
+    const el = marco.current
+    if (!el) return
+    el.scrollTo({ left: Math.max(0, x(k) - 12), behavior: 'smooth' })
+    // También baja la página hasta el primer cruce de esa ronda, que en las rondas finales queda más abajo
+    const fila = Math.min(k, rs.length - 1)
+    const arriba = el.getBoundingClientRect().top + window.scrollY + y(fila, 0) - ALTO / 2 - 150
+    if (Math.abs(arriba - window.scrollY) > 40) window.scrollTo({ top: Math.max(0, arriba), behavior: 'smooth' })
+  }
+
+  // Al abrir, el cuadro arranca en la ronda que se está jugando
+  useEffect(() => {
+    if (actual > 0 && marco.current) marco.current.scrollLeft = Math.max(0, x(actual - 1) - 12)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.id, CRUCE])
 
   return (
-    <div className="llave-marco" tabIndex={0} aria-label="Cuadro del torneo">
-      <div className="llave" style={{ width: ancho, height: alto }}>
-        <svg className="llave-lineas" width={ancho} height={alto} aria-hidden="true">
-          {lineas.map((l, i) => (
-            <path key={i} d={l.d} className={l.ruta ? 'ruta' : ''} />
+    <>
+      {rs.length > 2 && (
+        <div className="llave-rondas" role="group" aria-label="Ir a la ronda">
+          {rs.map((r, k) => (
+            <button key={r.ronda} className={k === actual ? 'actual' : ''} onClick={() => irA(k)}>
+              {r.ronda === 'Semifinal' ? 'Semis' : r.ronda}
+              {r.partidos.every((p) => p.sets) && <Check size={13} strokeWidth={3} aria-hidden="true" />}
+            </button>
           ))}
-        </svg>
-        {rs.map((r, k) => (
-          <div key={r.ronda}>
-            <p className="llave-ronda" style={{ left: x(k), width: CRUCE }}>
-              {r.ronda === 'Semifinal' ? 'Semifinales' : r.ronda}
-            </p>
-            {r.partidos.map((p, i) => (
-              <div key={p.id} className={`llave-cruce${ganador(p) ? ' jugado' : ''}`} style={{ left: x(k), top: y(k, i) - ALTO / 2, width: CRUCE, height: ALTO }}>
-                <p className="llave-cuando">
-                  {corto(p.dia)}, {hora(p.inicio)}, {canchaNombre(p.canchaId)}
-                </p>
-                <Marcador c={c} p={p} />
-              </div>
+          <button onClick={() => irA(rs.length)}>
+            <Trophy size={14} aria-hidden="true" /> Copa
+          </button>
+        </div>
+      )}
+      <div className="llave-marco" ref={marco} tabIndex={0} aria-label="Cuadro del torneo">
+        <div className="llave" style={{ width: ancho, height: alto }}>
+          <svg className="llave-lineas" width={ancho} height={alto} aria-hidden="true">
+            {lineas.map((l, i) => (
+              <path key={i} d={l.d} className={l.ruta ? 'ruta' : ''} />
             ))}
+          </svg>
+          {rs.map((r, k) => (
+            <div key={r.ronda}>
+              <p className="llave-ronda" style={{ left: x(k), width: CRUCE }}>
+                {r.ronda === 'Semifinal' ? 'Semifinales' : r.ronda}
+              </p>
+              {r.partidos.map((p, i) => (
+                <div key={p.id} className={`llave-cruce${ganador(p) ? ' jugado' : ''}`} style={{ left: x(k), top: y(k, i) - ALTO / 2, width: CRUCE, height: ALTO }}>
+                  <p className="llave-cuando">
+                    {corto(p.dia)}, {hora(p.inicio)}, {canchaNombre(p.canchaId)}
+                  </p>
+                  <Marcador c={c} p={p} />
+                </div>
+              ))}
+            </div>
+          ))}
+          <p className="llave-ronda" style={{ left: x(rs.length), width: PODIO }}>
+            Campeones
+          </p>
+          <div className={`llave-copa${campeones ? ' hay' : ''}`} style={{ left: x(rs.length), top: y(rs.length - 1, 0) - 62, width: PODIO, height: 124 }}>
+            <Trophy size={30} aria-hidden="true" />
+            <strong>{campeones ? campeones.nombre : 'A definir'}</strong>
+            <span>{campeones ? c.categoria : `Final: ${corto(final.dia)}, ${hora(final.inicio)}`}</span>
           </div>
-        ))}
-        <p className="llave-ronda" style={{ left: x(rs.length), width: PODIO }}>
-          Campeones
-        </p>
-        <div className={`llave-copa${campeones ? ' hay' : ''}`} style={{ left: x(rs.length), top: y(rs.length - 1, 0) - 62, width: PODIO, height: 124 }}>
-          <Trophy size={30} aria-hidden="true" />
-          <strong>{campeones ? campeones.nombre : 'A definir'}</strong>
-          <span>{campeones ? c.categoria : `Final: ${corto(final.dia)}, ${hora(final.inicio)}`}</span>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -242,7 +328,11 @@ export function VistaCompetencia({ c, editable, guardar }: { c: Competencia; edi
   const [ronda, setRonda] = useState(rondaActual(c))
   const [compartir, setCompartir] = useState(false)
   const cam = campeon(c)
-  const vistas: [Vista, string][] = esLiga ? [['fixture', 'Fixture'], ['tabla', 'Tabla']] : [['cuadro', 'Cuadro'], ['zonas', 'Zonas']]
+  const vistas: [Vista, string][] = esLiga
+    ? [['fixture', 'Fixture'], ['tabla', 'Tabla']]
+    : zonasDe(c).length
+      ? [['cuadro', 'Cuadro'], ['zonas', 'Zonas']]
+      : [['cuadro', 'Cuadro']]
   const delaRonda = rs.find((r) => r.ronda === ronda) ?? rs[0]
   const eliminacion = rs.filter((r) => !r.ronda.startsWith('Zona'))
 
@@ -294,7 +384,13 @@ export function VistaCompetencia({ c, editable, guardar }: { c: Competencia; edi
 
       {vista === 'tabla' && (
         <>
-          <TablaPosiciones filas={tabla(c.parejas, c.partidos)} partidos={c.partidos} />
+          <TablaPosiciones
+            filas={tabla(c.parejas, c.partidos)}
+            partidos={c.partidos}
+            antes={antesDeLaUltima(c)}
+            clasifican={Math.min(4, Math.floor(c.parejas.length / 2))}
+            zona={`Los ${Math.min(4, Math.floor(c.parejas.length / 2))} primeros juegan el Master de fin de año`}
+          />
           <p className="comp-nota">Partido ganado suma 3 puntos. Desempata la diferencia de sets y después la de games.</p>
         </>
       )}

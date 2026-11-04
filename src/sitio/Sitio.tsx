@@ -260,6 +260,9 @@ function TarjetaCompetencia({ c, tono }: { c: Competencia; tono: string }) {
   const r = rondaActual(c)
   const proxima = rondas(c).find((x) => x.ronda === r)!.partidos[0]
   const arriba = tabla(c.parejas, c.partidos).slice(0, 3)
+  const nombre = (id: string | null) => c.parejas.find((p) => p.id === id)?.nombre ?? 'A definir'
+  // Un torneo en juego no tiene tabla: se muestran los cruces que vienen
+  const cruces = c.formato === 'torneo' ? rondas(c).find((x) => x.ronda === r)!.partidos.slice(0, 2) : []
   return (
     <Link to={`/competencia/${c.id}`} className={`torneo ${tono}`}>
       <span className="torneo-cabeza">
@@ -275,6 +278,16 @@ function TarjetaCompetencia({ c, tono }: { c: Competencia; tono: string }) {
             {cam.nombre}
           </span>
         </span>
+      ) : cruces.length ? (
+        <ul className="torneo-tabla torneo-cruces">
+          {cruces.map((p) => (
+            <li key={p.id}>
+              <span className="torneo-pareja">{nombre(p.a)}</span>
+              <span className="torneo-vs">vs</span>
+              <span className="torneo-pareja">{nombre(p.b)}</span>
+            </li>
+          ))}
+        </ul>
       ) : (
         <ol className="torneo-tabla">
           {arriba.map((f, i) => (
@@ -299,7 +312,7 @@ function TarjetaCompetencia({ c, tono }: { c: Competencia; tono: string }) {
 
 function Torneos() {
   const e = useDatos()
-  const tonos = ['azul', 'noche', 'blanco']
+  const tonos = ['azul', 'noche', 'blanco', 'noche']
   return (
     <section id="torneos" className="torneos">
       <div className="ancho">

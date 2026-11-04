@@ -585,7 +585,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
 }
 .torneo {
@@ -1126,4 +1126,58 @@
     display: inline-block;
     padding-block: 10px;
   }
+}
+
+/* ——— Celular: la portada y la cabecera del torneo más cortas, para ver el nombre y el contenido enseguida ——— */
+@media (max-width: 760px) {
+  .portada {
+    min-height: min(560px, 74svh);
+  }
+  .portada-texto {
+    padding-top: 72px;
+  }
+  .portada h1 {
+    font-size: clamp(2.8rem, 1.6rem + 6vw, 3.6rem);
+  }
+  .competencia-portada {
+    padding: 20px 0 22px;
+  }
+  .competencia-tipo {
+    margin-bottom: 10px !important;
+  }
+  .competencia-portada h1 {
+    font-size: clamp(2.2rem, 1.4rem + 5vw, 2.8rem);
+  }
+  .competencia-dato {
+    margin-top: 8px !important;
+    font-size: 16px;
+  }
+  .competencia-avance {
+    margin-top: 12px;
+  }
+  .competencia-campeon {
+    margin-top: 14px !important;
+    padding: 10px 16px 10px 12px;
+  }
+  .competencia-campeon strong {
+    font-size: 20px;
+  }
+}
+
+.torneo-cruces li {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.torneo-cruces li .torneo-pareja:last-child {
+  text-align: right;
+}
+.torneo-vs {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pelota);
+  color: var(--noche);
+  font-size: 12px;
+  font-weight: 800;
 }

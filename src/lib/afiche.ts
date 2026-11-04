@@ -154,7 +154,8 @@ export async function dibujarAfiche(canvas: HTMLCanvasElement, c: Competencia, c
 
 /** El cuadro de eliminación con las líneas que unen cada cruce con el siguiente, y la copa abajo. */
 function dibujarLlave(ctx: CanvasRenderingContext2D, c: Competencia, x0: number, y0: number, ancho: number, alto: number, e: Estilo) {
-  const rs = rondas(c).filter((r) => !r.ronda.startsWith('Zona'))
+  // En la placa entran bien tres rondas: en un torneo grande se muestra desde cuartos
+  const rs = rondas(c).filter((r) => !r.ronda.startsWith('Zona')).slice(-3)
   if (!rs.length) return
   const cam = campeon(c)
   const nombre = (p: Partido, lado: 'a' | 'b') => {

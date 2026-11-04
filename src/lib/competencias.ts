@@ -149,6 +149,51 @@ export function fixtureTorneo(parejas: Pareja[], sabado: string): Partido[] {
   return partidos
 }
 
+const nombreRonda: Record<number, [string, string]> = {
+  16: ['16avos', '16avos-'],
+  8: ['Octavos', 'octavos-'],
+  4: ['Cuartos', 'cuartos'],
+  2: ['Semifinal', 'semi'],
+  1: ['Final', 'final'],
+}
+
+/**
+ * Eliminación directa para 16 o 32 parejas, como los torneos grandes: 16avos y octavos el primer sábado,
+ * cuartos el domingo, semis y final el sábado siguiente. Cada ganador pasa al cruce de abajo en el cuadro.
+ */
+export function fixtureEliminacion(parejas: Pareja[], sabado: string): Partido[] {
+  const partidos: Partido[] = []
+  const dias: Record<string, [string, number[]]> = {
+    '16avos': [sabado, [600, 690, 780, 870]],
+    Octavos: [sabado, [1020, 1110]],
+    Cuartos: [sumarDias(sabado, 1), [600]],
+    Semifinal: [sumarDias(sabado, 7), [1020]],
+    Final: [sumarDias(sabado, 7), [1170]],
+  }
+  let previos: string[] = []
+  for (let n = parejas.length / 2; n >= 1; n /= 2) {
+    const [ronda, prefijo] = nombreRonda[n]
+    const [dia, turnos] = dias[ronda]
+    const ids: string[] = []
+    for (let i = 0; i < n; i++) {
+      const id = n === 1 ? 'final' : `${prefijo}${i}`
+      ids.push(id)
+      partidos.push({
+        id,
+        ronda,
+        dia,
+        inicio: turnos[Math.floor(i / negocio.canchas.length) % turnos.length],
+        canchaId: negocio.canchas[i % negocio.canchas.length].id,
+        a: previos.length ? null : parejas[i * 2].id,
+        b: previos.length ? null : parejas[i * 2 + 1].id,
+        ...(previos.length ? { desdeA: { ganador: previos[i * 2] }, desdeB: { ganador: previos[i * 2 + 1] } } : {}),
+      })
+    }
+    previos = ids
+  }
+  return partidos
+}
+
 export const zonasDe = (c: Competencia) => [...new Set(c.partidos.filter((p) => p.ronda.startsWith('Zona')).map((p) => p.ronda.slice(5)))]
 
 export function parejasDeZona(c: Competencia, zona: string) {
@@ -178,7 +223,7 @@ export function resolver(c: Competencia): Partido[] {
 }
 
 export const etiquetaOrigen = (o?: Origen) =>
-  !o ? 'A definir' : 'zona' in o ? `${o.puesto}° Zona ${o.zona}` : `Ganador ${o.ganador.startsWith('cuartos') ? 'cuartos' : 'semi'} ${Number(o.ganador.slice(-1)) + 1}`
+  !o ? 'A definir' : 'zona' in o ? `${o.puesto}° Zona ${o.zona}` : `Ganador ${o.ganador.replace(/-?\d+$/, '')} ${Number(o.ganador.match(/\d+$/)?.[0] ?? 0) + 1}`
 
 /** Las rondas en orden, con sus partidos. */
 export function rondas(c: Competencia) {

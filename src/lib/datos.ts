@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from 'react'
 import { negocio, precioDe } from '../config/negocio'
 import { ahoraMin, deClave, hoyClave, sumarDias } from './formato'
-import { fixtureLiga, fixtureTorneo, resolver as resolverLlave, setsAlAzar, type Competencia, type Pareja, type Sets } from './competencias'
+import { fixtureEliminacion, fixtureLiga, fixtureTorneo, resolver as resolverLlave, setsAlAzar, type Competencia, type Pareja, type Sets } from './competencias'
 
 export type Metodo = 'efectivo' | 'transferencia' | 'mercadopago'
 export const metodos: Record<Metodo, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia', mercadopago: 'Mercado Pago' }
@@ -44,7 +44,7 @@ export type Estado = {
   competencias: Competencia[]
 }
 
-const VERSION = 5
+const VERSION = 6
 const CLAVE = 'tresmuros-demo'
 
 function azar(semilla: number) {
@@ -140,8 +140,14 @@ function generar(): Estado {
 function competenciasDeMuestra(hoy: string, r: () => number): Competencia[] {
   // Cada competencia arma sus parejas con apellidos sin repetir
   const todos = [...apellidos, 'Gómez', 'Paz', 'Olmos', 'Villarreal', 'Ríos', 'Aguirre', 'Molina', 'Castro', 'Maldonado', 'Rojas', 'Peralta', 'Arias']
-  const parejas = (n: number, pre: string): Pareja[] => {
-    const mazo = [...todos].sort(() => r() - 0.5)
+  // Para el torneo grande hacen falta 64 apellidos distintos
+  const muchos = [
+    ...todos, 'Acosta', 'Benítez', 'Medina', 'Herrera', 'Suárez', 'Torres', 'Juárez', 'Ruiz', 'Álvarez', 'Ojeda', 'Paredes', 'Ponce', 'Ríos', 'Navarro',
+    'Coronel', 'Ibarra', 'Godoy', 'Figueroa', 'Correa', 'Cáceres', 'Ortiz', 'Domínguez', 'Morales', 'Vargas', 'Bravo', 'Mansilla', 'Toledo', 'Rivero',
+    'Barrionuevo', 'Avendaño', 'Bazán', 'Tapia', 'Leiva', 'Zárate', 'Lucero', 'Montenegro', 'Arce', 'Salas', 'Cuello',
+  ].filter((x, i, l) => l.indexOf(x) === i)
+  const parejas = (n: number, pre: string, lista = todos): Pareja[] => {
+    const mazo = [...lista].sort(() => r() - 0.5)
     return Array.from({ length: n }, (_, i) => ({ id: `${pre}${i}`, nombre: `${mazo[i * 2]} / ${mazo[i * 2 + 1]}` }))
   }
   const jugar = (c: Competencia, hasta: string) => {
@@ -173,7 +179,18 @@ function competenciasDeMuestra(hoy: string, r: () => number): Competencia[] {
       return p.ronda === ronda && x.a && x.b && p.dia < hoy ? { ...p, sets: setsAlAzar(r) } : p
     })
   }
-  return [liga, damas, torneo]
+  // Copa grande de 32 parejas: 16avos, octavos y cuartos jugados; semis y final este sábado
+  const copa: Competencia = { id: 'copa-tres-muros', nombre: 'Copa Tres Muros', formato: 'torneo', categoria: 'Suma 13 libre', parejas: [], partidos: [] }
+  copa.parejas = parejas(32, 'cp', muchos)
+  copa.partidos = fixtureEliminacion(copa.parejas, sabadoPasado)
+  for (const ronda of ['16avos', 'Octavos', 'Cuartos', 'Semifinal', 'Final']) {
+    const resueltos = resolverLlave(copa)
+    copa.partidos = copa.partidos.map((p) => {
+      const x = resueltos.find((q) => q.id === p.id)!
+      return p.ronda === ronda && x.a && x.b && p.dia < hoy ? { ...p, a: x.a, b: x.b, sets: setsAlAzar(r) } : p
+    })
+  }
+  return [liga, damas, copa, torneo]
 }
 
 function cargar(): Estado {
