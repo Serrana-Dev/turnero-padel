@@ -6,7 +6,7 @@ import { negocio } from '../config/negocio'
 import { abrirCaja, anularVenta, aperturaDe, cerrarCaja, metodos, registrarGasto, registrarRetiro, resumenCaja, useDatos, type LineaCaja, type Metodo } from '../lib/datos'
 import { capital, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
-import { Cabecera, Menos } from './comun'
+import { abrirWhatsApp, Cabecera, Menos } from './comun'
 import { usePanel } from './Panel'
 
 type Filtro = 'todo' | 'cancha' | 'cantina' | 'gasto' | 'retiro'
@@ -25,6 +25,7 @@ export function Caja() {
   const esHoy = dia === hoy
   const apertura = aperturaDe(e, dia)
   const sinAbrir = esHoy && !apertura && !r.cierre
+  const sinRegistro = !esHoy && !apertura && !r.cierre
 
   // Saldo del cajón (solo efectivo) después de cada movimiento, de la apertura en adelante
   const saldos = useMemo(() => {
@@ -36,10 +37,10 @@ export function Caja() {
     }
     return m
   }, [r.lineas])
-  // Las señas de la web entran todas por Mercado Pago: se muestran juntas en una sola línea
+  // Las señas de la web entran todas por transferencia: se muestran juntas en una sola línea
   const señas = r.lineas.filter((l) => l.detalle === 'Seña del turno')
   const agrupadas: LineaCaja[] = señas.length > 1
-    ? [...r.lineas.filter((l) => l.detalle !== 'Seña del turno'), { id: señas[0].id, hora: Math.max(...señas.map((l) => l.hora)), tipo: 'cancha', concepto: `${señas.length} señas de turnos reservados`, detalle: 'Desde la web', metodo: 'mercadopago', monto: señas.reduce((s2, l) => s2 + l.monto, 0) } as LineaCaja].sort((a, b) => b.hora - a.hora)
+    ? [...r.lineas.filter((l) => l.detalle !== 'Seña del turno'), { id: señas[0].id, hora: Math.max(...señas.map((l) => l.hora)), tipo: 'cancha', concepto: `${señas.length} señas de turnos reservados`, detalle: 'Señas por transferencia', metodo: 'transferencia', monto: señas.reduce((s2, l) => s2 + l.monto, 0) } as LineaCaja].sort((a, b) => b.hora - a.hora)
     : r.lineas
   const visibles = filtro === 'todo' ? agrupadas : agrupadas.filter((l) => l.tipo === filtro)
 
@@ -69,6 +70,10 @@ export function Caja() {
             <strong>Cerrada por {r.cierre.cajero}</strong> a las {hora(r.cierre.hora)}
             {r.diferencia === 0 ? ': cerró justa.' : `: ${r.diferencia! > 0 ? 'sobraron' : 'faltaron'} ${pesos(Math.abs(r.diferencia!))}.`}
           </p>
+        ) : sinRegistro ? (
+          <p>
+            <strong>Sin registro de apertura ni cierre</strong> para este día.
+          </p>
         ) : sinAbrir ? (
           <p>
             <strong>La caja todavía no se abrió.</strong> Contá el cambio con el que arrancás y abrila.
@@ -79,7 +84,7 @@ export function Caja() {
           </p>
         )}
         {sinAbrir && <button className="boton boton-chico boton-amarillo" onClick={() => setDialogo('abrir')}>Abrir caja</button>}
-        {!r.cierre && !sinAbrir && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
+        {!r.cierre && !sinAbrir && !sinRegistro && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
         {r.cierre && <Link className="boton boton-chico" to="/admin/caja/historial">Ver historial</Link>}
       </div>
 
@@ -317,7 +322,7 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
           <div className="contado-total"><span>Contaste</span><strong>{pesos(contado)}</strong></div>
           <div className="acciones-fila">
             <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
-            <button className="boton boton-primario" disabled={!contado} onClick={() => setVer(true)}>Listo, ver el resultado</button>
+            <button className="boton boton-primario" onClick={() => setVer(true)}>Listo, ver el resultado</button>
           </div>
         </>
       ) : (
@@ -334,10 +339,10 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
             <div className="ficha-total"><dt>Contaste</dt><dd>{pesos(contado)}</dd></div>
           </dl>
           <div className="digitales">
-            {(['mercadopago', 'transferencia'] as Metodo[]).map((m) => (
+            {(['transferencia'] as Metodo[]).map((m) => (
               <p key={m}><span>{metodos[m]} según el sistema</span><strong>{pesos(r.ventas.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0))}</strong></p>
             ))}
-            <small>Controlalo con la app de Mercado Pago y el home banking: no pasa por el cajón.</small>
+            <small>Controlalo con el home banking: las transferencias no pasan por el cajón.</small>
           </div>
           <label className="campo">
             Cierra
@@ -345,6 +350,7 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
           </label>
           <div className="acciones-fila">
             <button type="button" className="boton" onClick={() => setVer(false)}>Volver a contar</button>
+            <button className="boton boton-wsp" onClick={() => abrirWhatsApp(textoCierre(r, contado, cajero, dia))}>Mandar al dueño</button>
             <button className="boton boton-primario" onClick={() => { cerrarCaja(dia, contado, cajero); cerrar() }}>Cerrar la caja</button>
           </div>
         </>
@@ -395,4 +401,19 @@ function DialogoAnular({ l, cerrar }: { l: LineaCaja; cerrar: () => void }) {
       </div>
     </Dialogo>
   )
+}
+
+/** El cierre en un mensaje, para mandárselo al dueño por WhatsApp. */
+export function textoCierre(r: ReturnType<typeof resumenCaja>, contado: number, cajero: string, dia: string) {
+  const dif = contado - r.esperado
+  const transf = r.ventas.filter((l) => l.metodo === 'transferencia').reduce((s, l) => s + l.monto, 0)
+  return [
+    `Cierre de caja · ${negocio.nombre}`,
+    `${capital(fechaLarga(dia))} · cerró ${cajero}`,
+    `Entró ${pesos(r.entro)} (canchas ${pesos(r.canchas)} · cantina ${pesos(r.cantina)})`,
+    `Salió ${pesos(r.salio)} en gastos y compras`,
+    `Transferencias ${pesos(transf)}`,
+    `Efectivo: tendría que haber ${pesos(r.esperado)}, se contó ${pesos(contado)}`,
+    dif === 0 ? 'Cerró justa ✅' : `${dif > 0 ? 'Sobraron' : 'Faltaron'} ${pesos(Math.abs(dif))}`,
+  ].join('\n')
 }

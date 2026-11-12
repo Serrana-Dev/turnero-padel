@@ -3,8 +3,9 @@ import { useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 import type { Categoria } from '../config/negocio'
 import { agregarConsumo, ajustarCuenta, cobrarParte, cuantosJuegan, metodos, quitarConsumo, renombrarJugador, repartoCuenta, useDatos, type Metodo } from '../lib/datos'
-import { hora, pesos } from '../lib/formato'
-import { Buscador, categorias, coincide, IconoProducto, Vuelto } from './comun'
+import { hora, hoyClave, pesos } from '../lib/formato'
+import { negocio } from '../config/negocio'
+import { abrirWhatsApp, Buscador, categorias, coincide, IconoProducto, Vuelto } from './comun'
 
 /** Los que juegan, con el nombre editable ahí mismo. */
 function Jugadores({ reservaId, bloqueado }: { reservaId: string; bloqueado: boolean }) {
@@ -105,7 +106,7 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
   const [paga, setPaga] = useState<Record<string, number | null>>({})
   const [abierto, setAbierto] = useState<string | null>(null)
   const cerrada = r.estado === 'pagada' && !!r.porCuenta
-  const pagoDe = (n: string) => c.pagos.find((p) => p.nombre === n)
+  const cajaCerrada = e.cierres.some((x) => x.dia === hoyClave())
   const bloqueado = cerrada || c.pagos.length > 0
 
   if (rep.total === 0 && !cerrada) return <p className="ayuda cuenta-vacia">El turno ya está pagado y no consumieron nada. Si piden algo, cargalo en Consumos y se cobra acá.</p>
@@ -135,17 +136,18 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
 
       <ul className="partes">
         {rep.partes.map((p) => {
-          const pago = pagoDe(p.nombre)
+          const ultimo = [...c.pagos].reverse().find((x) => x.nombre === p.nombre)
+          const pago = p.monto <= 0 ? ultimo ?? { metodo: 'efectivo' as Metodo, monto: 0 } : null
           return (
             <li key={p.nombre} className={pago ? 'parte-paga' : ''}>
               <span className="jugador-avatar" aria-hidden="true">{pago ? <Check size={15} /> : p.nombre.startsWith('Jugador') ? p.nombre.slice(-1) : p.nombre[0]}</span>
               <span className="parte-texto">
                 <strong>{p.nombre}</strong>
-                <small>{p.detalle}</small>
+                <small>{p.detalle}{p.pagado > 0 && p.monto > 0 ? ` · ya pagó ${pesos(p.pagado)}, le falta esto` : ''}</small>
               </span>
-              <span className="parte-monto">{pesos(pago?.monto ?? p.monto)}</span>
+              <span className="parte-monto">{pesos(pago ? p.pagado : p.monto)}</span>
               {pago ? (
-                <span className="estado estado-pagada">{metodos[pago.metodo]}</span>
+                <span className="estado estado-pagada">{p.pagado > 0 ? `Pagó · ${metodos[pago.metodo]}` : 'No debe nada'}</span>
               ) : (
                 <span className="parte-cobro">
                   <select aria-label={`Medio de pago de ${p.nombre}`} value={metodo[p.nombre] ?? 'efectivo'} onChange={(ev) => setMetodo({ ...metodo, [p.nombre]: ev.target.value as Metodo })}>
@@ -154,7 +156,7 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
                   {(metodo[p.nombre] ?? 'efectivo') === 'efectivo' && p.monto > 0 && (
                     <button type="button" className={`boton boton-chico ${abierto === p.nombre ? 'activo' : ''}`} onClick={() => setAbierto(abierto === p.nombre ? null : p.nombre)}>Vuelto</button>
                   )}
-                  <button className="boton boton-chico boton-amarillo" disabled={p.monto <= 0 || (paga[p.nombre] != null && (paga[p.nombre] as number) < p.monto)} onClick={() => { cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo'); setAbierto(null) }}>Cobrar</button>
+                  <button className="boton boton-chico boton-amarillo" disabled={cajaCerrada || p.monto <= 0 || (paga[p.nombre] != null && (paga[p.nombre] as number) < p.monto)} onClick={() => { cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo'); setAbierto(null) }}>Cobrar</button>
                 </span>
               )}
               {!pago && abierto === p.nombre && (metodo[p.nombre] ?? 'efectivo') === 'efectivo' && (
@@ -164,7 +166,23 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
           )
         })}
       </ul>
-      {cerrada && <p className="aviso-ok">Pagaron todos: el turno quedó cobrado y lo de la cantina ya descontó el stock.</p>}
+      {cajaCerrada && !cerrada && <p className="aviso-linea">La caja de hoy ya se cerró: para cobrar, primero hay que volver a abrirla.</p>}
+      {cerrada && (
+        <div className="cuenta-cerrada">
+          <p className="aviso-ok">Pagaron todos: la cancha y lo consumido quedaron cobrados, y la cantina ya descontó el stock.</p>
+          <button
+            className="boton boton-wsp"
+            onClick={() => {
+              const cancha = negocio.canchas.find((x) => x.id === r.canchaId)!.nombre
+              const lineas = rep.partes.map((p) => `• ${p.nombre}: ${pesos(p.pagado)}`).join('\n')
+              const consumido = c.consumos.map((x) => e.productos.find((k) => k.id === x.itemId)?.nombre).filter(Boolean).join(', ')
+              abrirWhatsApp(`${negocio.nombre} · ${cancha} ${hora(r.inicio)}\nCancha ${pesos(rep.saldoCancha)}${consumido ? ` + cantina ${pesos(rep.consumos)} (${consumido})` : ''}\nTotal ${pesos(rep.total)}\n${lineas}\n¡Gracias por venir!`)
+            }}
+          >
+            Mandar el detalle por WhatsApp
+          </button>
+        </div>
+      )}
     </section>
   )
 }

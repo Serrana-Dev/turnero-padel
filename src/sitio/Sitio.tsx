@@ -75,7 +75,7 @@ function Portada() {
           {negocio.barrio}, {negocio.ciudad}
         </p>
         <h1>{negocio.nombre}</h1>
-        <p className="portada-bajada">Cuatro canchas de blindex, liga todo el año y torneo el último fin de semana del mes. Reservás acá y señás con Mercado Pago.</p>
+        <p className="portada-bajada">Cuatro canchas de blindex, liga todo el año y torneo el último fin de semana del mes. Reservás acá y señás por transferencia.</p>
         <div className="portada-acciones">
           <a className="btn btn-pelota" href="#reservar">
             Reservar cancha
@@ -187,6 +187,7 @@ function FormReserva({ eleccion, cerrar }: { eleccion: Eleccion | null; cerrar: 
   const [nombre, setNombre] = useState('')
   const [tel, setTel] = useState('')
   const [pago, setPago] = useState<'nada' | 'pagando' | 'ok'>('nada')
+  const [copiado, setCopiado] = useState(false)
   const [hecha, setHecha] = useState<Reserva | null>(null)
 
   useEffect(() => {
@@ -215,11 +216,19 @@ function FormReserva({ eleccion, cerrar }: { eleccion: Eleccion | null; cerrar: 
           <dl className="datos-lista">
             <div><dt>A nombre de</dt><dd>{hecha.titular}</dd></div>
             <div><dt>Cuándo</dt><dd>{capital(fechaRelativa(hecha.dia))}, {hora(hecha.inicio)} a {hora(hecha.inicio + negocio.duracion)}</dd></div>
-            <div><dt>Seña</dt><dd>{hecha.estado === 'señada' ? `${pesos(negocio.seña)} pagada` : 'A pagar en el club'}</dd></div>
+            <div><dt>Seña</dt><dd>{hecha.estado === 'señada' ? `${pesos(negocio.seña)} por transferencia` : 'A pagar en el club'}</dd></div>
             <div><dt>Saldo en el club</dt><dd>{pesos(hecha.precio - hecha.seña)}</dd></div>
           </dl>
           <p className="tenue">Te llega la confirmación por WhatsApp. Si no podés venir, avisanos hasta 6 horas antes y te devolvemos la seña.</p>
           <div className="acciones">
+            <a
+              className="btn btn-wsp"
+              href={`https://wa.me/?text=${encodeURIComponent(`¡Jugamos ${fechaRelativa(hecha.dia)} a las ${hora(hecha.inicio)} en ${negocio.nombre}, ${eleccion.cancha.nombre}! ¿Quién se suma? ${location.origin}${location.pathname}`)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Avisale al grupo
+            </a>
             <button className="btn btn-primario" onClick={cerrar}>Listo</button>
             <Link className="btn btn-secundario" to={`/admin?dia=${hecha.dia}`}>Así lo ve el club</Link>
           </div>
@@ -238,13 +247,19 @@ function FormReserva({ eleccion, cerrar }: { eleccion: Eleccion | null; cerrar: 
             <input required name="telefono" type="tel" value={tel} onChange={(ev) => setTel(ev.target.value)} inputMode="tel" placeholder="351 000-0000…" autoComplete="tel" />
           </label>
           {pago === 'ok' ? (
-            <p className="pago-ok">Seña de {pesos(negocio.seña)} aprobada con Mercado Pago</p>
+            <p className="pago-ok">Listo: avisaste la transferencia de la seña ({pesos(negocio.seña)}). El club la confirma por WhatsApp.</p>
           ) : (
-            <button type="button" className="btn btn-mp" disabled={pago === 'pagando'} onClick={() => { setPago('pagando'); setTimeout(() => setPago('ok'), 1100) }}>
-              {pago === 'pagando' ? 'Procesando pago…' : `Señar ${pesos(negocio.seña)} con Mercado Pago`}
-            </button>
+            <div className="transferir">
+              <p>Para asegurar el turno, transferí la seña de <strong>{pesos(negocio.seña)}</strong> a este alias:</p>
+              <div className="transferir-alias">
+                <strong>{negocio.alias}</strong>
+                <button type="button" onClick={() => { navigator.clipboard?.writeText(negocio.alias).catch(() => {}); setCopiado(true) }}>{copiado ? 'Copiado ✓' : 'Copiar'}</button>
+              </div>
+              <small>A nombre de {negocio.titularCuenta}</small>
+              <button type="button" className="btn btn-pelota" onClick={() => setPago('ok')}>Ya transferí la seña</button>
+            </div>
           )}
-          <p className="tenue chico">Pago simulado: es una demo. El resto, {pesos(precio - negocio.seña)}, se paga en el club.</p>
+          <p className="tenue chico">Es una demo: no se transfiere nada de verdad. El resto, {pesos(precio - negocio.seña)}, se paga en el club al terminar, junto con lo que consumas.</p>
           <button className={pago === 'ok' ? 'btn btn-primario' : 'btn btn-secundario-link'} disabled={!nombre || !tel}>
             {pago === 'ok' ? 'Confirmar reserva' : 'O reservar sin seña (queda pendiente)'}
           </button>

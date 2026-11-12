@@ -6,8 +6,8 @@ import { negocio } from '../config/negocio'
 import { aperturaDe, metodos, resumenCaja, useDatos, type Estado, type Metodo } from '../lib/datos'
 import { capital, deClave, diaMes, fechaCorta, fechaLarga, hora, hoyClave, mesAño, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
-import { Buscador, Cabecera, Chips, coincide, Menos } from './comun'
-import { DialogoGasto } from './Caja'
+import { abrirWhatsApp, Buscador, Cabecera, Chips, coincide, Menos } from './comun'
+import { DialogoGasto, textoCierre } from './Caja'
 
 const DIAS = 42
 
@@ -80,7 +80,7 @@ export function Historial() {
               )
             })}
           </div>
-          <p className="ayuda">La barrita de cada día es lo que entró. Tocá un día para ver su informe de cierre.</p>
+          <p className="ayuda">Cada día muestra lo que entró, en miles. Tocá uno para ver su informe de cierre.</p>
         </section>
 
         <aside className="rail">
@@ -177,6 +177,7 @@ function InformeCierre({ dia, cerrar, irAlDia }: { dia: string; cerrar: () => vo
       </div>
       <div className="acciones-fila">
         <button className="boton" onClick={cerrar}>Cerrar</button>
+        {r.cierre && <button className="boton boton-wsp" onClick={() => abrirWhatsApp(textoCierre(r, r.cierre!.contado, r.cierre!.cajero, dia))}>Mandar por WhatsApp</button>}
         <button className="boton boton-primario" onClick={irAlDia}>Ver los movimientos</button>
       </div>
     </Dialogo>

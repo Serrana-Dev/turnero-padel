@@ -4,8 +4,8 @@ import { negocio, precioDe, type Insumo, type ItemCantina, type LineaReceta } fr
 import { ahoraMin, deClave, hoyClave, sumarDias } from './formato'
 import { fixtureEliminacion, fixtureLiga, fixtureTorneo, resolver as resolverLlave, setsAlAzar, type Competencia, type Pareja, type Sets } from './competencias'
 
-export type Metodo = 'efectivo' | 'transferencia' | 'mercadopago'
-export const metodos: Record<Metodo, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia', mercadopago: 'Mercado Pago' }
+export type Metodo = 'efectivo' | 'transferencia'
+export const metodos: Record<Metodo, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia' }
 
 export type EstadoReserva = 'pendiente' | 'señada' | 'pagada' | 'cancelada'
 export const estados: Record<EstadoReserva, string> = {
@@ -80,7 +80,7 @@ export type Estado = {
   insumos: Insumo[]
 }
 
-const VERSION = 9
+const VERSION = 10
 const CLAVE = 'tresmuros-demo'
 
 function azar(semilla: number) {
@@ -131,7 +131,8 @@ function generar(): Estado {
         const pasada = d < 0 || (d === 0 && inicio + negocio.duracion <= ahora)
         const enCurso = d === 0 && inicio <= ahora && inicio + negocio.duracion > ahora
         let estado: EstadoReserva = 'señada'
-        if (pasada) estado = r() < 0.04 ? 'cancelada' : 'pagada'
+        // Los que terminaron hace menos de 45 minutos todavía están para cobrar: se cobra al final, la cancha y lo consumido
+        if (pasada) estado = r() < 0.04 ? 'cancelada' : d === 0 && inicio + negocio.duracion > ahora - 45 ? 'señada' : 'pagada'
         else if (enCurso) estado = 'señada'
         else if (!fijo && r() < 0.14) estado = 'pendiente'
         reservas.push({
@@ -146,7 +147,7 @@ function generar(): Estado {
           estado,
           origen: fijo ? 'fijo' : r() < 0.62 ? 'web' : 'whatsapp',
           fijoId: fijo?.id,
-          metodo: estado === 'pagada' ? (['efectivo', 'transferencia', 'mercadopago'] as Metodo[])[Math.floor(r() * 3)] : undefined,
+          metodo: estado === 'pagada' ? (r() < 0.5 ? 'efectivo' : 'transferencia') : undefined,
         })
       }
     }
@@ -168,7 +169,7 @@ function generar(): Estado {
     for (const [id, p] of mezcla) if ((x -= p) <= 0) return productos.find((c) => c.id === id)!
     return productos[0]
   }
-  const metodoAzar = (): Metodo => (r() < 0.45 ? 'efectivo' : r() < 0.7 ? 'mercadopago' : 'transferencia')
+  const metodoAzar = (): Metodo => (r() < 0.55 ? 'efectivo' : 'transferencia')
   const ventas: Venta[] = []
   for (let d = -62; d <= 0; d++) {
     const dia = sumarDias(hoy, d)
@@ -258,14 +259,14 @@ function generar(): Estado {
 
   // Cuentas abiertas en las canchas que se están jugando o recién terminaron
   const cuentas: Cuenta[] = []
-  for (const res of reservas.filter((x) => x.dia === hoy && x.estado === 'señada' && x.inicio <= ahora && x.inicio + negocio.duracion + 30 > ahora)) {
+  for (const res of reservas.filter((x) => x.dia === hoy && x.estado === 'señada' && x.inicio <= ahora && x.inicio + negocio.duracion + 45 > ahora)) {
     const primero = res.titular.split(' ')[0]
     const nom = [primero, ...[...nombres].sort(() => r() - 0.5).filter((n) => n !== primero).slice(0, 3)]
     const consumos: Consumo[] = []
     const n = 2 + Math.floor(r() * 4)
     for (let i = 0; i < n; i++) {
       const it = itemAzar()
-      consumos.push({ id: `cc${res.id}${i}`, itemId: it.id, quien: r() < 0.3 ? null : nom[Math.floor(r() * nom.length)], hora: res.inicio + 10 + i * 12 })
+      consumos.push({ id: `cc${res.id}${i}`, itemId: it.id, quien: r() < 0.3 ? null : nom[Math.floor(r() * nom.length)], hora: Math.min(res.inicio + 10 + i * 12, ahora) })
     }
     cuentas.push({ reservaId: res.id, nombres: nom, consumos, pagos: [], modo: r() < 0.5 ? 'partes' : 'persona', partes: 4 })
   }
@@ -551,25 +552,37 @@ export function repartoCuenta(e: Estado, reservaId: string) {
   const saldoCancha = r.estado === 'pagada' && !r.porCuenta ? 0 : r.precio - r.seña
   const consumos = c.consumos.reduce((s, x) => s + precioDeItem(x.itemId), 0)
   const total = saldoCancha + consumos
-  let partes: { nombre: string; monto: number; detalle: string }[]
+  // Lo que le toca a cada uno: suma exacto el total (el redondeo a $100 se reparte, nadie queda en negativo)
+  let ideal: { nombre: string; ideal: number; detalle: string }[]
   if (c.modo === 'partes') {
     const n = Math.max(1, c.nombres.length)
-    const base = Math.ceil(total / n / 100) * 100
-    partes = Array.from({ length: n }, (_, i) => ({
+    const cientos = Math.floor(total / 100)
+    const resto = total - cientos * 100
+    const base = Math.floor(cientos / n)
+    const extra = cientos - base * n
+    ideal = Array.from({ length: n }, (_, i) => ({
       nombre: c.nombres[i],
-      monto: i === n - 1 ? total - base * (n - 1) : base,
+      ideal: (base + (i < extra ? 1 : 0)) * 100 + (i === n - 1 ? resto : 0),
       detalle: `1/${n} de la cancha y lo consumido`,
     }))
   } else {
     const gente = c.nombres.length ? c.nombres : ['Titular']
     const comun = c.consumos.filter((x) => !x.quien || !gente.includes(x.quien)).reduce((s, x) => s + precioDeItem(x.itemId), 0)
     const porCabeza = (saldoCancha + comun) / gente.length
-    partes = gente.map((g) => {
+    let acumulado = 0
+    ideal = gente.map((g, i) => {
       const suyo = c.consumos.filter((x) => x.quien === g)
-      const monto = Math.round((porCabeza + suyo.reduce((s, x) => s + precioDeItem(x.itemId), 0)) / 100) * 100
-      return { nombre: g, monto, detalle: suyo.length ? suyo.map((x) => productoDe(e, x.itemId)?.nombre).join(', ') : 'Su parte de la cancha' }
+      const crudo = porCabeza + suyo.reduce((s, x) => s + precioDeItem(x.itemId), 0)
+      const monto = i === gente.length - 1 ? total - acumulado : Math.round(crudo / 100) * 100
+      acumulado += monto
+      return { nombre: g, ideal: Math.max(0, monto), detalle: suyo.length ? `Su parte de la cancha + ${suyo.map((x) => productoDe(e, x.itemId)?.nombre).join(', ')}` : 'Su parte de la cancha' }
     })
   }
+  // Lo que ya pagó cada uno se descuenta: si se cargó algo después de que alguien pagó, le queda la diferencia
+  const partes = ideal.map((x) => {
+    const pagado = c.pagos.filter((p) => p.nombre === x.nombre).reduce((s, p) => s + p.monto, 0)
+    return { nombre: x.nombre, detalle: x.detalle, ideal: x.ideal, pagado, monto: Math.max(0, x.ideal - pagado) }
+  })
   return { cuenta: c, saldoCancha, consumos, total, partes, pagado: c.pagos.reduce((s, p) => s + p.monto, 0) }
 }
 
@@ -578,7 +591,8 @@ export function cobrarParte(reservaId: string, nombre: string, monto: number, me
   const c = cuentaDe(estado, reservaId)
   const nueva = { ...c, pagos: [...c.pagos, { nombre, monto, metodo, hora: ahoraMin() }] }
   const rep = repartoCuenta({ ...estado, cuentas: conCuenta(estado, nueva) }, reservaId)
-  const completo = rep.partes.every((p) => nueva.pagos.some((x) => x.nombre === p.nombre))
+  // Se cierra cuando lo cobrado cubre el total (la cancha y todo lo consumido)
+  const completo = rep.pagado >= rep.total
   if (!completo) return guardar({ ...estado, cuentas: conCuenta(estado, nueva) })
   const ventas: Venta[] = c.consumos.map((x, i) => ({
     id: `v${Date.now()}${i}`, dia: hoyClave(), hora: x.hora, itemId: x.itemId, monto: productoDe(estado, x.itemId)?.precio ?? 0,
@@ -683,7 +697,7 @@ export function movimientosCaja(e: Estado, dia: string): LineaCaja[] {
   const lineas: LineaCaja[] = []
   for (const r of e.reservas.filter((x) => x.dia === dia && x.estado !== 'cancelada')) {
     if (r.seña > 0)
-      lineas.push({ id: `s${r.id}`, hora: dia === hoyClave() ? Math.min(Math.max(480, r.inicio - 120), Math.max(480, ahoraMin())) : Math.max(480, r.inicio - 120), tipo: 'cancha', concepto: `${cancha(r.canchaId)} · ${r.titular}`, detalle: 'Seña del turno', metodo: 'mercadopago', monto: r.seña, reserva: r.id })
+      lineas.push({ id: `s${r.id}`, hora: dia === hoyClave() ? Math.min(Math.max(480, r.inicio - 120), Math.max(480, ahoraMin())) : Math.max(480, r.inicio - 120), tipo: 'cancha', concepto: `${cancha(r.canchaId)} · ${r.titular}`, detalle: 'Seña del turno', metodo: 'transferencia', monto: r.seña, reserva: r.id })
     if (r.estado === 'pagada' && !r.porCuenta)
       lineas.push({ id: r.id, hora: r.inicio + negocio.duracion, tipo: 'cancha', concepto: `${cancha(r.canchaId)} · ${r.titular}`, detalle: 'Saldo del turno', metodo: r.metodo ?? 'efectivo', monto: r.precio - r.seña, reserva: r.id })
   }

@@ -24,12 +24,7 @@ export function Fijos() {
 
   return (
     <div className="pantalla">
-      <div className="titulo-fila">
-        <div>
-          <h1>Turnos fijos</h1>
-          <p>{e.fijos.length} parejas juegan todas las semanas · unos {pesos(ingresoMensual)} asegurados por mes</p>
-        </div>
-      </div>
+      <Cabecera seccion="canchas" titulo="Turnos fijos" cuentas={{ '/admin/fijos': e.solicitudes.length }} frase={<><strong>{e.fijos.length} parejas</strong> juegan todas las semanas: unos <strong>{pesos(ingresoMensual)}</strong> asegurados por mes.</>} />
 
       {e.solicitudes.length > 0 && (
         <section className="tarjeta tarjeta-destacada">
@@ -138,7 +133,7 @@ export function Reportes() {
         <button className="boton boton-primario" onClick={() => descargarExcel(e, desde, hoy)}><Download size={16} aria-hidden="true" /> Descargar Excel</button>
       </Cabecera>
       <div className="kpis">
-        <div className="kpi"><span>Ingresos por canchas</span><strong>{pesos(r.ingresos)}</strong><small className={cambio >= 0 ? 'bien' : 'mal'}>{cambio >= 0 ? '+' : '−'}{pct(Math.abs(cambio))} contra las 4 semanas anteriores</small></div>
+        <div className="kpi"><span>Facturado en canchas</span><strong>{pesos(r.ingresos)}</strong><small className={cambio >= 0 ? 'bien' : 'mal'}>{cambio >= 0 ? '+' : '−'}{pct(Math.abs(cambio))} contra las 4 semanas anteriores</small></div>
         <div className="kpi"><span>Ocupación</span><strong>{pct(ocupacion)}</strong><small>{r.periodo.length} turnos jugados o reservados</small></div>
         <div className="kpi"><span>Cantina</span><strong>{pesos(r.cantina)}</strong><small>{pct(r.cantina / (r.ingresos + r.cantina))} de lo facturado</small></div>
         <div className="kpi"><span>Siesta (12:30 a 17:00)</span><strong className="mal">{pct(r.siesta)}</strong><small>ocupación: horario para promocionar</small></div>
@@ -232,7 +227,7 @@ function ReporteCantina({ desde, hoy }: { desde: string; hoy: string }) {
       <section className="tarjeta">
         <div className="tarjeta-cabeza"><h2>Cómo pagan en el mostrador</h2></div>
         <div className="apilada">
-          {porMetodo.map((x) => <i key={x.m} style={{ flexGrow: x.t, background: x.m === 'efectivo' ? '#e2f24b' : x.m === 'mercadopago' ? '#2f6fd6' : '#0a1d42' }} />)}
+          {porMetodo.map((x) => <i key={x.m} style={{ flexGrow: x.t, background: x.m === 'efectivo' ? '#e2f24b' : '#2f6fd6' }} />)}
         </div>
         <ul className="lista-simple">
           {porMetodo.map((x) => <li key={x.m}><span>{metodos[x.m]}</span><strong>{pesos(x.t)} · {pct(x.t / totalMet)}</strong></li>)}

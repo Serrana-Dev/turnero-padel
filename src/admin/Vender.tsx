@@ -26,7 +26,9 @@ export function Vender() {
   /** Descuento en %; 100 = invita la casa. */
   const [desc, setDesc] = useState(0)
 
-  const ventasHoy = e.ventas.filter((v) => v.dia === hoy)
+  // Lo vendido en el mostrador hoy (sin anuladas; lo de las canchas se cuenta en la cuenta de cada turno)
+  const ventasHoy = e.ventas.filter((v) => v.dia === hoy && !v.anulada && !v.reservaId)
+  const cajaCerrada = e.cierres.some((x) => x.dia === hoy)
   const totalHoy = ventasHoy.reduce((s, v) => s + v.monto, 0)
   const lista = e.productos.filter((p) => !p.pausado && (cat === 'todos' || p.categoria === cat) && (!q || coincide(p.nombre, q) || coincide(resumenReceta(e, p.id), q)))
   const lista0 = ticket.reduce((s, l) => s + (e.productos.find((p) => p.id === l.itemId)?.precio ?? 0) * l.cantidad, 0)
@@ -72,8 +74,10 @@ export function Vender() {
 
   return (
     <div className="pantalla pantalla-vender">
-      <Cabecera seccion="cantina" titulo="Vender" cuentas={{ '/admin/subproductos': bajoMinimo(e).length }} frase={<>Hoy van <strong>{pesos(totalHoy)}</strong> en {ventasHoy.length} ventas de la cantina. Tocá los productos para armar el ticket.</>} />
+      <Cabecera seccion="cantina" titulo="Vender" cuentas={{ '/admin/subproductos': bajoMinimo(e).length }} frase={<>Hoy van <strong>{pesos(totalHoy)}</strong> en {ventasHoy.length} {ventasHoy.length === 1 ? 'venta' : 'ventas'} del mostrador. Tocá los productos para armar el ticket.</>} />
 
+      {cajaCerrada && <p className="aviso-linea">La caja de hoy ya se cerró: se puede cargar a la cuenta de una cancha, pero para cobrar hay que abrirla de nuevo.</p>}
+      {hecho && <div className="toast" role="status" key={hecho}>{hecho}</div>}
       <div className="mostrador">
         <div className="mostrador-productos">
           <Buscador valor={q} cambiar={setQ} texto="Buscar producto" />
@@ -161,7 +165,7 @@ export function Vender() {
                 </div>
               </div>
             )}
-            <button className="boton boton-amarillo boton-ancho boton-cobrar" disabled={!ticket.length || (destino === 'cobrar' && metodo === 'efectivo' && paga !== null && paga < total)} onClick={cobrar}>
+            <button className="boton boton-amarillo boton-ancho boton-cobrar" disabled={!ticket.length || (destino === 'cobrar' && cajaCerrada) || (destino === 'cobrar' && metodo === 'efectivo' && paga !== null && paga < total)} onClick={cobrar}>
               {destino === 'cobrar' ? (desc === 100 ? 'Invitar' : `Cobrar ${pesos(total)}`) : `Cargar ${pesos(lista0)} a la cancha`}
             </button>
           </div>

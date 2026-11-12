@@ -4,7 +4,7 @@ Demo visual de un sistema de reservas de canchas. **Tres Muros Pádel** es un cl
 Es todo frontend: los datos de prueba se generan solos y se guardan en el navegador.
 
 - **Web pública** (`#/`): reservar mirando las canchas: se elige día y hora, y las cuatro canchas aparecen dibujadas
-  desde arriba, libres u ocupadas. Seña simulada de Mercado Pago, torneos y ligas, precios, clases y turno fijo.
+  desde arriba, libres u ocupadas. Seña por transferencia (alias), torneos y ligas, precios, clases y turno fijo.
 - **Torneos y ligas** (`#/competencia/<id>`): fixture por fecha como en el fútbol, tabla de posiciones (3 puntos por
   partido ganado, desempata sets y games), torneos con zonas y cuadro hasta la final. Cada fecha, tabla o cuadro se
   comparte como placa lista para WhatsApp o Instagram: cuatro diseños, formato publicación o historia, se dibuja en el
@@ -38,6 +38,11 @@ Es todo frontend: los datos de prueba se generan solos y se guardan en el navega
   "invita la casa" (sale del stock, no entra plata) y anulación de ventas con motivo (queda tachada y el stock vuelve).
 - **Abrir caja** con cajero y cambio contado, **mermas** con motivo y costo perdido, subproductos que **se venden tal
   cual** (una lata: se crea el producto solo) y **Reportes** de la cantina con descarga a Excel de los movimientos.
+- **Se cobra al terminar**: lo que consumen en la cancha se carga al turno y al final se cobra todo junto (cancha y
+  productos). Los turnos que terminaron sin pagar aparecen en "Para cobrar al terminar" y la cancha lo avisa.
+- **Solo efectivo y transferencia** (la seña de la web también va por transferencia, con el alias del club).
+- **WhatsApp**: el detalle de la cuenta para los jugadores, el cierre de caja para el dueño y "Avisale al grupo" al
+  reservar desde la web.
 - En el celular, el panel tiene una barra abajo (Canchas, Vender, Caja, Stock y Más).
 
 Lo que se reserva en la web aparece en el panel. **Reiniciar demo** vuelve todo a cero.

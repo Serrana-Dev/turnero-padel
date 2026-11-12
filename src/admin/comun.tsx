@@ -111,7 +111,12 @@ export const coincide = (texto: string, q: string) => normal(texto).includes(nor
 
 // ——— Submódulos: las pantallas hermanas de cada sección, como pestañas arriba ———
 export type Hermana = { a: string; texto: string; cuenta?: number; fin?: boolean }
-export const secciones: Record<'cantina' | 'plata', Hermana[]> = {
+export const secciones: Record<'canchas' | 'cantina' | 'plata', Hermana[]> = {
+  canchas: [
+    { a: '/admin', texto: 'Canchas del día', fin: true },
+    { a: '/admin/fijos', texto: 'Turnos fijos' },
+    { a: '/admin/torneos', texto: 'Torneos y ligas' },
+  ],
   cantina: [
     { a: '/admin/vender', texto: 'Vender' },
     { a: '/admin/productos', texto: 'Productos y recetas' },
@@ -128,7 +133,7 @@ export const secciones: Record<'cantina' | 'plata', Hermana[]> = {
 
 export function Submodulos({ seccion, cuentas = {} }: { seccion: keyof typeof secciones; cuentas?: Record<string, number> }) {
   return (
-    <nav className={`submodulos submodulos-${seccion}`} aria-label={seccion === 'cantina' ? 'Cantina' : 'Plata'}>
+    <nav className={`submodulos submodulos-${seccion}`} aria-label={seccion === 'cantina' ? 'Cantina' : seccion === 'canchas' ? 'Canchas' : 'Caja'}>
       {secciones[seccion].map((h) => (
         <NavLink key={h.a} to={h.a} end={h.fin}>
           {h.texto}
@@ -212,3 +217,7 @@ export function Vuelto({ total, paga, cambiar, oscuro = false }: { total: number
     </div>
   )
 }
+
+/** Abre WhatsApp con un texto armado (para mandarle el cierre al dueño o el detalle de la cuenta a los jugadores). */
+export const abrirWhatsApp = (texto: string, telefono = '') =>
+  window.open(`https://wa.me/${telefono ? '54' + telefono.replace(/\D/g, '') : ''}?text=${encodeURIComponent(texto)}`, '_blank', 'noreferrer')

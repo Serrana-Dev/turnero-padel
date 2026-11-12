@@ -3,9 +3,9 @@ import { Link, NavLink, Outlet, useLocation, useOutletContext, useSearchParams }
 import { BarChart3, CalendarRange, ChefHat, Globe, History, Menu, Package, Receipt, Repeat, RotateCcw, ShoppingBag, Trophy, Truck, Wallet } from 'lucide-react'
 import { negocio } from '../config/negocio'
 import { ahoraMin, capital, diaMes, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
-import { actualizarReserva, estados, reiniciar, repartoCuenta, useDatos, type Reserva } from '../lib/datos'
+import { actualizarReserva, estados, reiniciar, repartoCuenta, resumenCaja, useDatos, type Reserva } from '../lib/datos'
 import { CuentaCobro, CuentaConsumos } from './Cuenta'
-import { bajoMinimo } from './comun'
+import { bajoMinimo, Cabecera } from './comun'
 import { Dialogo } from '../lib/ui'
 import { CanchaDibujo } from '../lib/cancha'
 
@@ -60,6 +60,12 @@ function seccionActual(ruta: string) {
 export function Layout() {
   const e = useDatos()
   const [abierto, setAbierto] = useState(false)
+  // Cada 30 segundos se redibuja: la cuenta regresiva de las canchas baja sola
+  const [, setTic] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTic((x) => x + 1), 30000)
+    return () => clearInterval(t)
+  }, [])
   const [reserva, setReserva] = useState<string | null>(null)
   const lugar = useLocation()
   const faltan = bajoMinimo(e).length
@@ -137,8 +143,11 @@ function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void 
   useEffect(() => {
     if (!r) return
     const ahora = ahoraMin()
-    const enJuego = r.dia === hoyClave() && r.inicio <= ahora && ahora < r.inicio + negocio.duracion + 30
-    setPestana(enJuego || e.cuentas.some((c) => c.reservaId === r.id && c.consumos.length) ? 'consumos' : 'turno')
+    const hoy = r.dia === hoyClave()
+    const enJuego = hoy && r.inicio <= ahora && ahora < r.inicio + negocio.duracion
+    const termino = (r.dia < hoyClave() || (hoy && r.inicio + negocio.duracion <= ahora)) && r.estado !== 'pagada' && r.estado !== 'cancelada'
+    // Terminó y no se cobró: directo a cobrar. Se está jugando: a cargar lo que consumen.
+    setPestana(termino ? 'cobrar' : enJuego || e.cuentas.some((c) => c.reservaId === r.id && c.consumos.length) ? 'consumos' : 'turno')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
   if (!r) return <Dialogo abierto={false} cerrar={cerrar} titulo="">{null}</Dialogo>
@@ -172,12 +181,12 @@ function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void 
             <div><dt>WhatsApp</dt><dd>{r.telefono}</dd></div>
             <div><dt>Reservó por</dt><dd>{r.origen === 'fijo' ? `Turno fijo desde el ${diaMes(fijo?.desde ?? r.dia)}` : r.origen === 'web' ? 'La web' : 'WhatsApp'}</dd></div>
             <div><dt>Precio</dt><dd>{pesos(r.precio)}</dd></div>
-            <div><dt>Seña</dt><dd>{r.seña ? `${pesos(r.seña)} por Mercado Pago` : '—'}</dd></div>
+            <div><dt>Seña</dt><dd>{r.seña ? `${pesos(r.seña)} por transferencia` : '—'}</dd></div>
           </dl>
           <div className="acciones-reserva">
             <a className="boton boton-wsp" href={`https://wa.me/54${r.telefono.replace(/\D/g, '')}?text=${msj}`} target="_blank" rel="noreferrer">Escribir por WhatsApp</a>
             {r.estado === 'pendiente' && <button className="boton" onClick={() => actualizarReserva(r.id, { estado: 'señada', seña: negocio.seña })}>Marcar seña recibida</button>}
-            {r.estado !== 'cancelada' && r.estado !== 'pagada' && <button className="boton boton-peligro" onClick={() => { actualizarReserva(r.id, { estado: 'cancelada' }); cerrar() }}>Cancelar y liberar</button>}
+            {r.estado !== 'cancelada' && r.estado !== 'pagada' && !rep.cuenta.consumos.length && !rep.cuenta.pagos.length && <button className="boton boton-peligro" onClick={() => { actualizarReserva(r.id, { estado: 'cancelada' }); cerrar() }}>Cancelar y liberar</button>}
           </div>
         </>
       )}
@@ -213,7 +222,9 @@ function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
           const actual = delDia.find((r) => r.inicio <= ahora && ahora < r.inicio + negocio.duracion)
           const proxima = delDia.filter((r) => r.inicio > ahora).sort((a, b) => a.inicio - b.inicio)[0]
           const resto = actual ? actual.inicio + negocio.duracion - ahora : 0
-          const ver = actual ?? proxima
+          // El que terminó y todavía no pagó: la cancha y lo que consumieron se cobran al final
+          const aCobrar = delDia.filter((r) => r.inicio + negocio.duracion <= ahora && r.estado !== 'pagada').sort((a, b) => b.inicio - a.inicio)[0]
+          const ver = aCobrar ?? actual ?? proxima
           return (
             <li key={c.id}>
               <button className="ahora-cancha" disabled={!ver} onClick={() => ver && verReserva(ver.id)}>
@@ -225,6 +236,9 @@ function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
                 </CanchaDibujo>
                 {actual && repartoCuenta(e, actual.id).consumos > 0 && (
                   <span className="ahora-cuenta"><Receipt size={13} aria-hidden="true" /> {pesos(repartoCuenta(e, actual.id).consumos)} en la cantina</span>
+                )}
+                {aCobrar && (
+                  <span className="ahora-cobrar">Terminó {hora(aCobrar.inicio + negocio.duracion)} · cobrar {pesos(repartoCuenta(e, aCobrar.id).total - repartoCuenta(e, aCobrar.id).pagado)}</span>
                 )}
                 <span className="ahora-pie">
                   {actual
@@ -296,32 +310,34 @@ export function Canchas() {
   const d = useMemo(() => {
     const delDia = e.reservas.filter((r) => r.dia === dia && r.estado !== 'cancelada')
     const total = negocio.canchas.length * negocio.turnos.length
-    const cobrado =
-      e.reservas.filter((r) => r.dia === dia && r.estado === 'pagada').reduce((s, r) => s + r.precio - r.seña, 0) +
-      e.reservas.filter((r) => r.dia === dia && r.estado !== 'cancelada').reduce((s, r) => s + r.seña, 0) +
-      e.ventas.filter((v) => v.dia === dia).reduce((s, v) => s + v.monto, 0)
+    // Lo cobrado es lo mismo que dice la caja de ese día
+    const cobrado = resumenCaja(e, dia).entro
+    const paraCobrar = e.reservas
+      .filter((r) => r.dia === hoy && r.estado !== 'pagada' && r.estado !== 'cancelada' && r.inicio <= ahoraMin())
+      .sort((a, b) => a.inicio - b.inicio)
     const sinSeña = e.reservas.filter((r) => r.estado === 'pendiente' && r.dia >= hoy).sort((a, b) => (a.dia + a.inicio).localeCompare(b.dia + b.inicio))
     const libresPico = negocio.canchas.length * negocio.turnos.filter((t) => t >= negocio.pico).length - delDia.filter((r) => r.inicio >= negocio.pico).length
-    return { delDia, ocupacion: delDia.length / total, cobrado, sinSeña, libresPico, aCobrar: delDia.filter((r) => r.estado !== 'pagada').reduce((s, r) => s + r.precio - r.seña, 0) }
+    return { delDia, ocupacion: delDia.length / total, cobrado, sinSeña, paraCobrar, libresPico, aCobrar: delDia.filter((r) => r.estado !== 'pagada').reduce((s, r) => s + r.precio - r.seña, 0) }
   }, [e, dia, hoy])
 
   const semana = Array.from({ length: 7 }, (_, i) => sumarDias(hoy, i - 1))
 
   return (
     <div className="pantalla">
-      <div className="titulo-fila">
-        <div>
-          <h1>Canchas del día</h1>
-          <p>{capital(fechaLarga(dia))}: {d.delDia.length} reservas de {negocio.canchas.length * negocio.turnos.length} turnos</p>
-        </div>
-        <div className="segmentos">
+      <Cabecera
+        seccion="canchas"
+        titulo="Canchas del día"
+        cuentas={{ '/admin/fijos': e.solicitudes.length }}
+        frase={<>{capital(fechaLarga(dia))}: <strong>{d.delDia.length} reservas</strong> de {negocio.canchas.length * negocio.turnos.length} turnos{d.paraCobrar.length ? <>, <strong>{d.paraCobrar.length} para cobrar</strong> al terminar</> : null}.</>}
+      >
+        <div className="segmentos segmentos-claros segmentos-dias">
           {semana.map((x) => (
             <button key={x} className={x === dia ? 'activa' : ''} onClick={() => setQ({ dia: x })}>
               {x === hoy ? 'Hoy' : capital(fechaCorta(x))}
             </button>
           ))}
         </div>
-      </div>
+      </Cabecera>
 
       <div className="kpis">
         <div className="kpi"><span>Ocupación</span><strong>{Math.round(d.ocupacion * 100)}%</strong><small>{d.libresPico} turnos libres en horario pico</small></div>
@@ -368,6 +384,29 @@ export function Canchas() {
         </section>
 
         <aside className="rail">
+          {d.paraCobrar.length > 0 && (
+            <>
+              <h2 className="rail-titulo">Para cobrar al terminar</h2>
+              <div className="tarjeta tarjeta-lista tarjeta-cobrar">
+                <ul className="lista">
+                  {d.paraCobrar.map((r) => {
+                    const rep = repartoCuenta(e, r.id)
+                    const termino = r.inicio + negocio.duracion <= ahoraMin()
+                    return (
+                      <li key={r.id}>
+                        <button onClick={() => verReserva(r.id)}>
+                          <span className="lista-hora">{hora(r.inicio)}</span>
+                          <span className="lista-texto">{negocio.canchas.find((c) => c.id === r.canchaId)!.nombre} · {r.titular.split(' ')[0]}<small>{termino ? 'Terminó' : 'Jugando'} · cancha {pesos(rep.saldoCancha)}{rep.consumos ? ` + cantina ${pesos(rep.consumos)}` : ''}</small></span>
+                          <strong className={termino ? 'cobrar-ya' : ''}>{pesos(rep.total - rep.pagado)}</strong>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="ayuda">Lo que consumen se carga a la cancha y al terminar se cobra todo junto: el turno y los productos.</p>
+              </div>
+            </>
+          )}
           <h2 className="rail-titulo">Falta la seña</h2>
           <div className="tarjeta tarjeta-lista">
             {d.sinSeña.length === 0 && <p className="vacio">Todas las reservas están señadas.</p>}

@@ -1240,3 +1240,52 @@
     margin-left: auto !important;
   }
 }
+
+/* Seña por transferencia */
+.transferir {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--noche, #0a1d42);
+  color: #fff;
+}
+.transferir p {
+  margin: 0;
+}
+.transferir small {
+  color: #8ea2c8;
+}
+.transferir-alias {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.1);
+}
+.transferir-alias strong {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--pelota, #e2f24b);
+  letter-spacing: 0.01em;
+}
+.transferir-alias button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--noche, #0a1d42);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-wsp {
+  background: #1fa855;
+  color: #fff;
+  text-decoration: none;
+}

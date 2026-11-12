@@ -23,6 +23,9 @@ export const negocio = {
   ciudad: 'Córdoba',
   direccion: 'Ricchieri 3240',
   whatsapp: '351 555-0142',
+  /** Para la seña y los cobros por transferencia (inventado para la demo). */
+  alias: 'tresmuros.padel',
+  titularCuenta: 'Tres Muros Pádel SRL',
   instagram: 'tresmurospadel',
   mapa: 'https://maps.google.com/?q=Barrio+Jardín,+Córdoba',
 

@@ -7,21 +7,18 @@ import { fixtureLiga, fixtureTorneo, type Competencia } from '../lib/competencia
 import { estadoCompetencia, VistaCompetencia } from '../lib/Competencia'
 import { capital, deClave, hora, hoyClave, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
+import { Cabecera } from './comun'
 
 export function Competencias() {
   const e = useDatos()
   const [nueva, setNueva] = useState(false)
   return (
     <div className="pantalla">
-      <div className="titulo-fila">
-        <div>
-          <h1>Torneos y ligas</h1>
-          <p>Armá el fixture, cargá resultados y compartí la fecha o la tabla con un diseño listo.</p>
-        </div>
+      <Cabecera seccion="canchas" titulo="Torneos y ligas" frase="Armá el fixture, cargá resultados y compartí la fecha o la tabla con un diseño listo.">
         <button className="boton boton-primario" onClick={() => setNueva(true)}>
           <Plus size={16} aria-hidden="true" /> Nueva liga o torneo
         </button>
-      </div>
+      </Cabecera>
       <ul className="competencias">
         {e.competencias.map((c) => {
           const est = estadoCompetencia(c)
