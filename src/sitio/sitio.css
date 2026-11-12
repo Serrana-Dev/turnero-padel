@@ -1181,3 +1181,62 @@
   font-size: 12px;
   font-weight: 800;
 }
+
+/* Celular: los accesos de la web como una fila de chips fija debajo de la cabecera */
+.btn-secundario-link {
+  background: none !important;
+  border: 0 !important;
+  color: var(--noche, #0a1d42) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  box-shadow: none !important;
+}
+.btn-secundario-link:disabled {
+  opacity: 0.45;
+}
+#turno-fijo {
+  scroll-margin-top: 120px;
+}
+@media (max-width: 760px) {
+  .cabecera {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 58px;
+    row-gap: 0;
+    padding-top: 8px;
+  }
+  .cabecera-menu {
+    display: flex !important;
+    order: 3;
+    flex: 1 0 100%;
+    gap: 6px;
+    margin: 4px -16px 0;
+    padding: 4px 16px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .cabecera-menu::-webkit-scrollbar {
+    display: none;
+  }
+  .cabecera-menu a {
+    flex: none;
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1.5px solid rgb(255 255 255 / 0.22);
+    color: #fff;
+    font-size: 14px;
+  }
+  .cabecera-menu a:first-child {
+    display: none;
+  }
+  section[id] {
+    scroll-margin-top: 110px;
+  }
+}
+@media (max-width: 760px) {
+  .cabecera .cabecera-boton {
+    order: 2;
+    margin-left: auto !important;
+  }
+}

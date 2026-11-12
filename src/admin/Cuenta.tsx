@@ -1,143 +1,161 @@
 // La cuenta de la cancha: lo que consumieron los que juegan, dividido en partes iguales o cada uno lo suyo.
 import { useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
-import { negocio } from '../config/negocio'
-import { agregarConsumo, ajustarCuenta, cobrarParte, metodos, quitarConsumo, repartoCuenta, useDatos, type Metodo } from '../lib/datos'
+import type { Categoria } from '../config/negocio'
+import { agregarConsumo, ajustarCuenta, cobrarParte, cuantosJuegan, metodos, quitarConsumo, renombrarJugador, repartoCuenta, useDatos, type Metodo } from '../lib/datos'
 import { hora, pesos } from '../lib/formato'
+import { Buscador, categorias, coincide, IconoProducto } from './comun'
 
-export function CuentaCancha({ reservaId }: { reservaId: string }) {
+/** Los que juegan, con el nombre editable ahí mismo. */
+function Jugadores({ reservaId, bloqueado }: { reservaId: string; bloqueado: boolean }) {
+  const e = useDatos()
+  const c = repartoCuenta(e, reservaId).cuenta
+  return (
+    <div className="jugadores-editables">
+      {c.nombres.map((n, i) => {
+        const pago = c.pagos.some((p) => p.nombre === n)
+        return (
+          <label key={n} className={`jugador-campo ${i === 0 ? 'jugador-titular' : ''}`}>
+            <span className="jugador-avatar" aria-hidden="true">{n.startsWith('Jugador') ? i + 1 : n[0]}</span>
+            <input
+              defaultValue={n.startsWith('Jugador') ? '' : n}
+              placeholder={`Jugador ${i + 1}`}
+              disabled={bloqueado || pago}
+              aria-label={`Nombre del jugador ${i + 1}`}
+              onBlur={(ev) => renombrarJugador(reservaId, n, ev.target.value || n)}
+              onKeyDown={(ev) => ev.key === 'Enter' && (ev.target as HTMLInputElement).blur()}
+            />
+            {pago && <Check size={14} aria-label="Pagó" />}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+export function CuentaConsumos({ reservaId }: { reservaId: string }) {
+  const e = useDatos()
+  const r = e.reservas.find((x) => x.id === reservaId)!
+  const c = repartoCuenta(e, reservaId).cuenta
+  const [para, setPara] = useState<string | null>(null)
+  const [cat, setCat] = useState<Categoria>('Bebidas')
+  const [q, setQ] = useState('')
+  const cerrada = r.estado === 'pagada' && !!r.porCuenta
+  const prod = (id: string) => e.productos.find((x) => x.id === id)
+  const total = c.consumos.reduce((s, x) => s + (prod(x.itemId)?.precio ?? 0), 0)
+
+  return (
+    <section className="cuenta-cancha" aria-label="Consumos de la cancha">
+      <h3 className="cuenta-sub">Quiénes juegan</h3>
+      <Jugadores reservaId={reservaId} bloqueado={cerrada} />
+
+      {!cerrada && (
+        <>
+          <h3 className="cuenta-sub">Cargar a</h3>
+          <div className="chips-filtro">
+            <button className={para === null ? 'activa' : ''} onClick={() => setPara(null)}>Para todos</button>
+            {c.nombres.map((n) => <button key={n} className={para === n ? 'activa' : ''} onClick={() => setPara(n)}>{n}</button>)}
+          </div>
+          <Buscador valor={q} cambiar={setQ} texto="Buscar en la cantina" />
+          {!q && (
+            <div className="pestanas-chicas">
+              {categorias.map((k) => <button key={k} className={cat === k ? 'activa' : ''} onClick={() => setCat(k)}>{k}</button>)}
+            </div>
+          )}
+          <div className="productos-grilla productos-chicos">
+            {e.productos.filter((x) => !x.pausado && (q ? coincide(x.nombre, q) : x.categoria === cat)).map((it) => (
+              <button key={it.id} className="producto-boton" onClick={() => agregarConsumo(reservaId, it.id, para)}>
+                <IconoProducto p={it} tam={30} icono={16} />
+                <span className="producto-boton-texto"><strong>{it.nombre}</strong><span>{pesos(it.precio)}</span></span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <h3 className="cuenta-sub">Lo que consumieron {c.consumos.length > 0 && <span className="tenue">{pesos(total)}</span>}</h3>
+      {c.consumos.length === 0 ? (
+        <p className="ayuda">Todavía nada. Tocá un producto y queda cargado a la cancha: se cobra todo junto al final.</p>
+      ) : (
+        <ul className="consumos">
+          {c.consumos.map((x) => {
+            const p = prod(x.itemId)
+            return (
+              <li key={x.id}>
+                {p && <IconoProducto p={p} tam={26} icono={14} />}
+                <span className="consumo-nombre">{p?.nombre ?? x.itemId}<small>{hora(x.hora)}</small></span>
+                <span className={`consumo-quien ${x.quien ? '' : 'todos'}`}>{x.quien ?? 'Todos'}</span>
+                <span className="consumo-precio">{pesos(p?.precio ?? 0)}</span>
+                {!cerrada && !c.pagos.length && <button className="btn-icono" aria-label="Quitar" onClick={() => quitarConsumo(reservaId, x.id)}><X size={14} /></button>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+export function CuentaCobro({ reservaId }: { reservaId: string }) {
   const e = useDatos()
   const r = e.reservas.find((x) => x.id === reservaId)!
   const rep = repartoCuenta(e, reservaId)
   const c = rep.cuenta
-  const [para, setPara] = useState<string | null>(null)
-  const [nuevo, setNuevo] = useState('')
-  const [cat, setCat] = useState<'Bebidas' | 'Tragos' | 'Cocina' | 'Deportes'>('Bebidas')
   const [metodo, setMetodo] = useState<Record<string, Metodo>>({})
-  const cerrada = r.estado === 'pagada' && r.porCuenta
+  const cerrada = r.estado === 'pagada' && !!r.porCuenta
   const pagoDe = (n: string) => c.pagos.find((p) => p.nombre === n)
-  const nombre = (id: string) => negocio.cantina.find((x) => x.id === id)?.nombre ?? id
-  const precio = (id: string) => negocio.cantina.find((x) => x.id === id)?.precio ?? 0
+  const bloqueado = cerrada || c.pagos.length > 0
 
-  const sumarNombre = () => {
-    const n = nuevo.trim()
-    if (!n || c.nombres.includes(n)) return
-    ajustarCuenta(reservaId, { nombres: [...c.nombres, n] })
-    setNuevo('')
-  }
+  if (rep.total === 0 && !cerrada) return <p className="ayuda cuenta-vacia">El turno ya está pagado y no consumieron nada. Si piden algo, cargalo en Consumos y se cobra acá.</p>
 
   return (
-    <section className="cuenta-cancha" aria-label="Cuenta de la cancha">
-      <div className="cuenta-cabeza">
-        <h3>Cuenta de la cancha</h3>
-        <span className="tenue">{c.consumos.length} {c.consumos.length === 1 ? 'consumo' : 'consumos'}</span>
+    <section className="cuenta-cancha" aria-label="Cobrar la cancha">
+      <div className="cuenta-resumen">
+        <div><span>Cancha</span><strong>{pesos(rep.saldoCancha)}</strong></div>
+        <div><span>Cantina</span><strong>{pesos(rep.consumos)}</strong></div>
+        <div className="cuenta-resumen-total"><span>Total</span><strong>{pesos(rep.total)}</strong></div>
       </div>
 
-      {/* Quiénes juegan */}
-      <div className="jugadores">
-        {c.nombres.map((n) => (
-          <span key={n} className="jugador">
-            {n}
-            {!cerrada && c.nombres.length > 1 && !pagoDe(n) && (
-              <button aria-label={`Quitar a ${n}`} onClick={() => ajustarCuenta(reservaId, { nombres: c.nombres.filter((x) => x !== n) })}><X size={12} /></button>
-            )}
-          </span>
-        ))}
-        {!cerrada && c.nombres.length < 6 && (
-          <form className="jugador-nuevo" onSubmit={(ev) => { ev.preventDefault(); sumarNombre() }}>
-            <input value={nuevo} onChange={(ev) => setNuevo(ev.target.value)} placeholder="Agregar nombre" aria-label="Nombre de quien juega" />
-            <button className="btn-icono" aria-label="Agregar"><Plus size={16} /></button>
-          </form>
-        )}
+      <div className="segmentos segmentos-ancho">
+        <button className={c.modo === 'partes' ? 'activa' : ''} disabled={bloqueado} onClick={() => ajustarCuenta(reservaId, { modo: 'partes' })}>Partes iguales</button>
+        <button className={c.modo === 'persona' ? 'activa' : ''} disabled={bloqueado} onClick={() => ajustarCuenta(reservaId, { modo: 'persona' })}>Cada uno lo suyo</button>
       </div>
-
-      {/* Cargar consumos */}
-      {!cerrada && (
-        <div className="cargar">
-          <div className="cargar-para">
-            <span className="tenue">Cargar a</span>
-            <div className="chips">
-              <button className={para === null ? 'activa' : ''} onClick={() => setPara(null)}>Todos</button>
-              {c.nombres.map((n) => <button key={n} className={para === n ? 'activa' : ''} onClick={() => setPara(n)}>{n}</button>)}
-            </div>
-          </div>
-          <div className="pestanas-chicas">
-            {(['Bebidas', 'Tragos', 'Cocina', 'Deportes'] as const).map((k) => <button key={k} className={cat === k ? 'activa' : ''} onClick={() => setCat(k)}>{k}</button>)}
-          </div>
-          <div className="productos-grilla productos-chicos">
-            {negocio.cantina.filter((x) => x.categoria === cat).map((it) => (
-              <button key={it.id} className="producto-boton" onClick={() => agregarConsumo(reservaId, it.id, para)}>
-                <strong>{it.nombre}</strong>
-                <span>{pesos(it.precio)}</span>
-              </button>
-            ))}
-          </div>
+      <p className="ayuda">
+        {c.modo === 'partes' ? 'La cancha y todo lo consumido se divide igual entre los que pagan.' : 'La cancha y lo que es "para todos" se divide; lo que pidió cada uno lo paga él.'}
+      </p>
+      {!bloqueado && (
+        <div className="chips-filtro chips-partes">
+          <span className="tenue">Pagan</span>
+          {[1, 2, 3, 4].map((n) => <button key={n} className={c.nombres.length === n ? 'activa' : ''} onClick={() => cuantosJuegan(reservaId, n)}>{n === 1 ? 'Uno solo' : n}</button>)}
+          {c.nombres.length >= 4 && c.nombres.length < 6 && <button onClick={() => cuantosJuegan(reservaId, c.nombres.length + 1)} aria-label="Uno más"><Plus size={14} /></button>}
         </div>
       )}
-
-      {c.consumos.length > 0 && (
-        <ul className="consumos">
-          {c.consumos.map((x) => (
-            <li key={x.id}>
-              <span className="consumo-hora">{hora(x.hora)}</span>
-              <span className="consumo-nombre">{nombre(x.itemId)}</span>
-              <span className={`consumo-quien ${x.quien ? '' : 'todos'}`}>{x.quien ?? 'Todos'}</span>
-              <span className="consumo-precio">{pesos(precio(x.itemId))}</span>
-              {!cerrada && !c.pagos.length && <button className="btn-icono" aria-label="Quitar" onClick={() => quitarConsumo(reservaId, x.id)}><X size={14} /></button>}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Cómo se divide */}
-      <div className="dividir">
-        <div className="segmentos segmentos-ancho">
-          <button className={c.modo === 'partes' ? 'activa' : ''} disabled={cerrada || c.pagos.length > 0} onClick={() => ajustarCuenta(reservaId, { modo: 'partes' })}>Dividir en partes iguales</button>
-          <button className={c.modo === 'persona' ? 'activa' : ''} disabled={cerrada || c.pagos.length > 0} onClick={() => ajustarCuenta(reservaId, { modo: 'persona' })}>Cada uno lo suyo</button>
-        </div>
-        {c.modo === 'partes' && !cerrada && !c.pagos.length && (
-          <div className="chips chips-partes">
-            <span className="tenue">Entre</span>
-            {[2, 3, 4].map((n) => <button key={n} className={c.partes === n ? 'activa' : ''} onClick={() => ajustarCuenta(reservaId, { partes: n })}>{n}</button>)}
-          </div>
-        )}
-      </div>
-
-      {rep.total === 0 && !cerrada && <p className="ayuda">El turno ya está pagado. Si consumen algo, cargalo y se cobra acá.</p>}
-      {(rep.total > 0 || cerrada) && (
-      <>
-      <dl className="ficha ficha-compacta">
-        <div><dt>Saldo de la cancha</dt><dd>{pesos(rep.saldoCancha)}</dd></div>
-        <div><dt>Cantina</dt><dd>{pesos(rep.consumos)}</dd></div>
-        <div className="ficha-total"><dt>Total a cobrar</dt><dd>{pesos(rep.total)}</dd></div>
-      </dl>
 
       <ul className="partes">
         {rep.partes.map((p) => {
           const pago = pagoDe(p.nombre)
           return (
             <li key={p.nombre} className={pago ? 'parte-paga' : ''}>
+              <span className="jugador-avatar" aria-hidden="true">{pago ? <Check size={15} /> : p.nombre.startsWith('Jugador') ? p.nombre.slice(-1) : p.nombre[0]}</span>
               <span className="parte-texto">
                 <strong>{p.nombre}</strong>
                 <small>{p.detalle}</small>
               </span>
               <span className="parte-monto">{pesos(pago?.monto ?? p.monto)}</span>
               {pago ? (
-                <span className="estado estado-pagada"><Check size={12} aria-hidden="true" /> {metodos[pago.metodo]}</span>
+                <span className="estado estado-pagada">{metodos[pago.metodo]}</span>
               ) : (
                 <span className="parte-cobro">
                   <select aria-label={`Medio de pago de ${p.nombre}`} value={metodo[p.nombre] ?? 'efectivo'} onChange={(ev) => setMetodo({ ...metodo, [p.nombre]: ev.target.value as Metodo })}>
                     {Object.entries(metodos).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
-                  <button className="boton boton-chico boton-primario" disabled={p.monto <= 0} onClick={() => cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo')}>Cobrar</button>
+                  <button className="boton boton-chico boton-amarillo" disabled={p.monto <= 0} onClick={() => cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo')}>Cobrar</button>
                 </span>
               )}
             </li>
           )
         })}
       </ul>
-      </>
-      )}
       {cerrada && <p className="aviso-ok">Pagaron todos: el turno quedó cobrado y lo de la cantina ya descontó el stock.</p>}
     </section>
   )

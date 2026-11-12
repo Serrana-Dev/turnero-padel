@@ -44,6 +44,7 @@ function Cabecera() {
         <a href="#reservar">Reservar</a>
         <a href="#torneos">Torneos y ligas</a>
         <a href="#club">El club</a>
+        <a href="#turno-fijo">Turno fijo</a>
       </nav>
       <a className="cabecera-boton" href="#reservar">
         Reservar
@@ -244,8 +245,8 @@ function FormReserva({ eleccion, cerrar }: { eleccion: Eleccion | null; cerrar: 
             </button>
           )}
           <p className="tenue chico">Pago simulado: es una demo. El resto, {pesos(precio - negocio.seña)}, se paga en el club.</p>
-          <button className="btn btn-primario" disabled={!nombre || !tel}>
-            {pago === 'ok' ? 'Confirmar reserva' : 'Reservar sin seña'}
+          <button className={pago === 'ok' ? 'btn btn-primario' : 'btn btn-secundario-link'} disabled={!nombre || !tel}>
+            {pago === 'ok' ? 'Confirmar reserva' : 'O reservar sin seña (queda pendiente)'}
           </button>
         </form>
       )}
@@ -383,7 +384,7 @@ function Club() {
             </ul>
           </article>
 
-          <article className="club-bloque club-fijo">
+          <article className="club-bloque club-fijo" id="turno-fijo">
             <img src="img/partido.jpg" alt="Partido de pádel entre cuatro jugadores" width={1920} height={1440} loading="lazy" />
             <div>
               <h3>Turno fijo</h3>

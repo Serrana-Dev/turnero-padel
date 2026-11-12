@@ -1,181 +1,178 @@
-// Caja: todo lo que entra (canchas, cantina) y sale (compras, sueldos, servicios), con apertura, cierre y arqueo.
+// Caja de hoy: todo lo que entra (canchas, cantina) y sale (compras, sueldos, retiros), con apertura, cierre y arqueo.
 import { useMemo, useState } from 'react'
-import { ArrowDownRight, ArrowUpRight, Lock, Receipt, ShoppingBag } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Lock, LockOpen, Minus, Plus, Receipt, ShoppingBag } from 'lucide-react'
 import { negocio } from '../config/negocio'
-import { cerrarCaja, efectivoEsperado, metodos, movimientosCaja, registrarGasto, useDatos, vender, type Metodo } from '../lib/datos'
-import { ahoraMin, capital, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
+import { cerrarCaja, metodos, registrarGasto, registrarRetiro, resumenCaja, useDatos, type LineaCaja, type Metodo } from '../lib/datos'
+import { capital, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
+import { Cabecera, Menos } from './comun'
 import { usePanel } from './Panel'
 
-type Filtro = 'todo' | 'ingresos' | 'gastos'
+type Filtro = 'todo' | 'cancha' | 'cantina' | 'gasto' | 'retiro'
 
 export function Caja() {
   const e = useDatos()
   const { verReserva } = usePanel()
   const hoy = hoyClave()
-  const [dia, setDia] = useState(hoy)
+  const [sp, setSp] = useSearchParams()
+  const dia = sp.get('dia') ?? hoy
+  const setDia = (d: string) => setSp(d === hoy ? {} : { dia: d })
   const [filtro, setFiltro] = useState<Filtro>('todo')
-  const [dialogo, setDialogo] = useState<'gasto' | 'venta' | 'cierre' | null>(null)
+  const [dialogo, setDialogo] = useState<'gasto' | 'retiro' | 'cierre' | null>(null)
+  const r = useMemo(() => resumenCaja(e, dia), [e, dia])
+  const esHoy = dia === hoy
 
-  const lineas = useMemo(() => movimientosCaja(e, dia), [e, dia])
-  const ingresos = lineas.filter((l) => l.monto > 0)
-  const gastos = lineas.filter((l) => l.monto < 0)
-  const totalIn = ingresos.reduce((s, l) => s + l.monto, 0)
-  const totalOut = -gastos.reduce((s, l) => s + l.monto, 0) || 0
-  const canchas = ingresos.filter((l) => l.tipo === 'cancha').reduce((s, l) => s + l.monto, 0)
-  const esperado = efectivoEsperado(e, dia)
-  const cierre = e.cierres.find((c) => c.dia === dia)
-  const visibles = filtro === 'ingresos' ? ingresos : filtro === 'gastos' ? gastos : lineas
-
-  const mesDesde = sumarDias(hoy, -29)
-  const porCategoria = negocio.categoriasGasto
-    .map((c) => ({ c, total: e.gastos.filter((g) => g.dia >= mesDesde && g.categoria === c).reduce((s, g) => s + g.monto, 0) }))
-    .sort((a, b) => b.total - a.total)
-  const maxCat = Math.max(...porCategoria.map((x) => x.total), 1)
-  const cierres = [...e.cierres].sort((a, b) => b.dia.localeCompare(a.dia)).slice(0, 7)
+  // Saldo del cajón (solo efectivo) después de cada movimiento, de la apertura en adelante
+  const saldos = useMemo(() => {
+    const m = new Map<string, number>()
+    let s = negocio.cajaInicial
+    for (const l of [...r.lineas].reverse()) {
+      if (l.metodo === 'efectivo') s += l.monto
+      m.set(l.id, s)
+    }
+    return m
+  }, [r.lineas])
+  // Las señas de la web entran todas por Mercado Pago: se muestran juntas en una sola línea
+  const señas = r.lineas.filter((l) => l.detalle === 'Seña del turno')
+  const agrupadas: LineaCaja[] = señas.length > 1
+    ? [...r.lineas.filter((l) => l.detalle !== 'Seña del turno'), { id: señas[0].id, hora: Math.max(...señas.map((l) => l.hora)), tipo: 'cancha', concepto: `${señas.length} señas de turnos reservados`, detalle: 'Desde la web', metodo: 'mercadopago', monto: señas.reduce((s2, l) => s2 + l.monto, 0) } as LineaCaja].sort((a, b) => b.hora - a.hora)
+    : r.lineas
+  const visibles = filtro === 'todo' ? agrupadas : agrupadas.filter((l) => l.tipo === filtro)
 
   return (
     <div className="pantalla">
-      <div className="titulo-fila">
-        <div>
-          <h1>Caja</h1>
-          <p>{capital(fechaLarga(dia))}</p>
-        </div>
-        <div className="segmentos">
+      <Cabecera
+        seccion="plata"
+        titulo={esHoy ? 'Caja de hoy' : capital(fechaLarga(dia))}
+        frase={
+          <>
+            Entraron <strong>{pesos(r.entro)}</strong> y salieron <strong>{pesos(r.salio)}</strong>.{' '}
+            {r.cierre ? <>Se cerró con <strong>{pesos(r.cierre.contado)}</strong> en el cajón.</> : <>En el cajón tendría que haber <strong>{pesos(r.esperado)}</strong>.</>}
+          </>
+        }
+      >
+        <div className="segmentos segmentos-claros">
           <button onClick={() => setDia(sumarDias(dia, -1))} aria-label="Día anterior">←</button>
-          <button className={dia === hoy ? 'activa' : ''} onClick={() => setDia(hoy)}>Hoy</button>
+          <button className={esHoy ? 'activa' : ''} onClick={() => setDia(hoy)}>Hoy</button>
           <button onClick={() => setDia(sumarDias(dia, 1))} disabled={dia >= hoy} aria-label="Día siguiente">→</button>
         </div>
-      </div>
+      </Cabecera>
 
-      <div className={`estado-caja ${cierre ? 'estado-caja-cerrada' : ''}`}>
-        <Lock size={18} aria-hidden="true" />
-        {cierre ? (
+      <div className={`estado-caja ${r.cierre ? 'estado-caja-cerrada' : ''}`}>
+        {r.cierre ? <Lock size={18} aria-hidden="true" /> : <LockOpen size={18} aria-hidden="true" />}
+        {r.cierre ? (
           <p>
-            <strong>Caja cerrada</strong> a las {hora(cierre.hora)}. Se contaron {pesos(cierre.contado)} en efectivo
-            {cierre.contado - esperado === 0 ? ', justo lo esperado.' : `: ${cierre.contado > esperado ? 'sobran' : 'faltan'} ${pesos(Math.abs(cierre.contado - esperado))}.`}
+            <strong>Cerrada por {r.cierre.cajero}</strong> a las {hora(r.cierre.hora)}
+            {r.diferencia === 0 ? ': cerró justa.' : `: ${r.diferencia! > 0 ? 'sobraron' : 'faltaron'} ${pesos(Math.abs(r.diferencia!))}.`}
           </p>
         ) : (
           <p>
-            <strong>Caja abierta</strong> desde las 08:00 con {pesos(negocio.cajaInicial)} de cambio. En efectivo tendría que haber {pesos(esperado)}.
+            <strong>Abierta</strong> desde las 08:00 con {pesos(negocio.cajaInicial)} de cambio.
           </p>
         )}
-        {!cierre && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
+        {!r.cierre && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
+        {r.cierre && <Link className="boton boton-chico" to="/admin/caja/historial">Ver historial</Link>}
       </div>
 
-      <div className="kpis">
-        <div className="kpi kpi-principal"><span>Entró</span><strong className="bien">{pesos(totalIn)}</strong><small>{pesos(canchas)} canchas · {pesos(totalIn - canchas)} cantina</small></div>
-        <div className="kpi"><span>Salió</span><strong className={totalOut ? 'mal' : ''}>{pesos(totalOut)}</strong><small>{gastos.length} gastos y compras</small></div>
-        <div className="kpi"><span>Resultado del día</span><strong>{pesos(totalIn - totalOut)}</strong><small>lo que entró menos lo que salió</small></div>
-        <div className="kpi"><span>Efectivo en caja</span><strong>{pesos(cierre ? cierre.contado : esperado)}</strong><small>{cierre ? 'contado al cerrar' : 'esperado ahora'}</small></div>
+      <div className="caja-acciones">
+        <Link className={`boton ${esHoy ? '' : 'deshabilitado'}`} to="/admin/vender"><ShoppingBag size={16} aria-hidden="true" /> Vender</Link>
+        <button className="boton" disabled={!esHoy || !!r.cierre} onClick={() => setDialogo('gasto')}><Receipt size={16} aria-hidden="true" /> Registrar gasto</button>
+        <button className="boton" disabled={!esHoy || !!r.cierre} onClick={() => setDialogo('retiro')}><ArrowLeftRight size={16} aria-hidden="true" /> Retiro o ingreso de efectivo</button>
+      </div>
+
+      <div className="kpis kpis-caja">
+        <div className="kpi kpi-principal"><span>Entró</span><strong className="bien">{pesos(r.entro)}</strong><small>{pesos(r.canchas)} canchas · {pesos(r.cantina)} cantina</small></div>
+        <div className="kpi"><span>Salió</span><strong className={r.salio ? 'mal' : ''}>{pesos(r.salio)}</strong><small>{r.salidas.length} {r.salidas.length === 1 ? 'gasto' : 'gastos y compras'}</small></div>
+        <div className="kpi"><span>Resultado del día</span><strong>{pesos(r.entro - r.salio)}</strong><small>lo que entró menos lo que salió</small></div>
+        <div className="kpi kpi-cajon"><span>En el cajón</span><strong>{pesos(r.cierre ? r.cierre.contado : r.esperado)}</strong><small>{r.cierre ? 'contado al cerrar' : 'efectivo esperado ahora'}</small></div>
       </div>
 
       <div className="grilla-rail">
-        <div className="columna">
-          <div className="caja-acciones">
-            <button className="boton" disabled={dia !== hoy} onClick={() => setDialogo('venta')}><ShoppingBag size={16} aria-hidden="true" /> Vender en el mostrador</button>
-            <button className="boton" disabled={dia !== hoy} onClick={() => setDialogo('gasto')}><Receipt size={16} aria-hidden="true" /> Registrar gasto</button>
+        <section className="tarjeta">
+          <div className="tarjeta-cabeza">
+            <h2>Movimientos del día</h2>
+            <span className="tenue">Saldo del cajón a la derecha</span>
           </div>
+          <div className="chips-filtro" role="group">
+            {([['todo', 'Todo'], ['cancha', 'Canchas'], ['cantina', 'Cantina'], ['gasto', 'Gastos'], ['retiro', 'Retiros']] as [Filtro, string][]).map(([k, t]) => (
+              <button key={k} className={filtro === k ? 'activa' : ''} onClick={() => setFiltro(k)}>
+                {t} <span>{k === 'todo' ? agrupadas.length : agrupadas.filter((l) => l.tipo === k).length}</span>
+              </button>
+            ))}
+          </div>
+          {visibles.length === 0 ? (
+            <p className="vacio">No hay movimientos.</p>
+          ) : (
+            <ol className="linea-tiempo">
+              {visibles.map((l) => (
+                <Movimiento key={l.id} l={l} saldo={saldos.get(l.id)!} abrir={() => l.reserva && verReserva(l.reserva)} />
+              ))}
+              <li className="lt lt-apertura">
+                <span className="lt-hora">08:00</span>
+                <span className="lt-punto" aria-hidden="true" />
+                <span className="lt-texto"><strong>Apertura de caja</strong><small>Cambio inicial</small></span>
+                <span className="lt-saldo">{pesos(negocio.cajaInicial)}</span>
+              </li>
+            </ol>
+          )}
+        </section>
 
-          <section className="tarjeta">
-            <div className="tarjeta-cabeza">
-              <h2>Por medio de pago</h2>
-            </div>
-            <table className="tabla">
-              <thead><tr><th>Medio</th><th className="num">Entró</th><th className="num">Salió</th><th className="num">Neto</th></tr></thead>
-              <tbody>
-                {(Object.keys(metodos) as Metodo[]).map((m) => {
-                  const ent = ingresos.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0)
-                  const sal = -gastos.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0)
-                  return (
-                    <tr key={m}>
-                      <td><strong>{metodos[m]}</strong></td>
-                      <td className="num bien">{pesos(ent)}</td>
-                      <td className="num mal">{sal ? `−${pesos(sal)}` : '—'}</td>
-                      <td className="num">{pesos(ent - sal)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </section>
-
-          <section className="tarjeta">
-            <div className="tarjeta-cabeza">
-              <h2>Movimientos</h2>
-              <div className="segmentos">
-                {([['todo', 'Todo'], ['ingresos', 'Entradas'], ['gastos', 'Salidas']] as [Filtro, string][]).map(([k, t]) => (
-                  <button key={k} className={filtro === k ? 'activa' : ''} onClick={() => setFiltro(k)}>{t}</button>
-                ))}
-              </div>
-            </div>
-            {visibles.length === 0 ? (
-              <p className="vacio">No hay movimientos.</p>
+        <aside className="rail">
+          <h2 className="rail-titulo">Por medio de pago</h2>
+          <div className="tarjeta medios">
+            {(Object.keys(metodos) as Metodo[]).map((m) => {
+              const ent = r.ventas.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0)
+              const sal = -r.salidas.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0)
+              return (
+                <div key={m} className={`medio medio-${m}`}>
+                  <span className="medio-nombre">{metodos[m]}</span>
+                  <strong>{pesos(ent - sal)}</strong>
+                  <small>Entró {pesos(ent)}{sal > 0 ? <> · salió <Menos n={sal} /></> : null}</small>
+                </div>
+              )
+            })}
+          </div>
+          <h2 className="rail-titulo">Retiros e ingresos de efectivo</h2>
+          <div className="tarjeta">
+            {r.retiros.length === 0 ? (
+              <p className="vacio">Hoy no se sacó plata del cajón.</p>
             ) : (
-              <ul className="movs">
-                {visibles.map((l) => (
-                  <li key={l.id}>
-                    <button className={`mov ${l.reserva ? '' : 'mov-fijo'}`} onClick={() => l.reserva && verReserva(l.reserva)} disabled={!l.reserva}>
-                      <span className={`mov-icono mov-${l.tipo}`} aria-hidden="true">{l.monto > 0 ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}</span>
-                      <span className="mov-texto">
-                        <strong>{l.concepto}</strong>
-                        <small>{hora(l.hora)} · {l.detalle} · {metodos[l.metodo]}</small>
-                      </span>
-                      <span className={`mov-monto ${l.monto > 0 ? 'bien' : 'mal'}`}>{l.monto > 0 ? '+' : '−'}{pesos(Math.abs(l.monto))}</span>
-                    </button>
-                  </li>
+              <ul className="lista-simple">
+                {r.retiros.map((l) => (
+                  <li key={l.id}><span>{hora(l.hora)} · {l.concepto}<small>{l.detalle}</small></span><strong className={l.monto < 0 ? 'mal' : 'bien'}>{l.monto < 0 ? '−' : '+'}{pesos(Math.abs(l.monto))}</strong></li>
                 ))}
               </ul>
             )}
-          </section>
-        </div>
-
-        <aside className="rail">
-          <h2 className="rail-titulo">Gastos de los últimos 30 días</h2>
-          <div className="tarjeta">
-            <ul className="barras-h">
-              {porCategoria.map(({ c, total }) => (
-                <li key={c}>
-                  <span>{c}</span>
-                  <span className="barras-h-barra barras-h-gasto"><i style={{ width: `${(total / maxCat) * 100}%` }} /></span>
-                  <strong>{pesos(total)}</strong>
-                </li>
-              ))}
-            </ul>
-            <p className="ayuda">Total: {pesos(porCategoria.reduce((s, x) => s + x.total, 0))}</p>
-          </div>
-          <h2 className="rail-titulo">Últimos cierres</h2>
-          <div className="tarjeta tarjeta-lista">
-            <ul className="lista">
-              {cierres.map((c) => {
-                const dif = c.contado - efectivoEsperado(e, c.dia)
-                return (
-                  <li key={c.dia}>
-                    <button onClick={() => setDia(c.dia)}>
-                      <span className="lista-texto">
-                        {capital(fechaCorta(c.dia))}
-                        <small>Contado {pesos(c.contado)}</small>
-                      </span>
-                      <span className={`estado ${dif === 0 ? 'estado-pagada' : dif > 0 ? 'estado-señada' : 'estado-pendiente'}`}>
-                        {dif === 0 ? 'Justo' : `${dif > 0 ? 'Sobró' : 'Faltó'} ${pesos(Math.abs(dif))}`}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <p className="ayuda">Un retiro no es un gasto: la plata sale del cajón pero sigue siendo del club (por ejemplo, para depositarla).</p>
           </div>
         </aside>
       </div>
 
       {dialogo === 'gasto' && <DialogoGasto cerrar={() => setDialogo(null)} />}
-      {dialogo === 'venta' && <DialogoVenta cerrar={() => setDialogo(null)} />}
+      {dialogo === 'retiro' && <DialogoRetiro cerrar={() => setDialogo(null)} />}
       {dialogo === 'cierre' && <DialogoCierre dia={dia} cerrar={() => setDialogo(null)} />}
     </div>
   )
 }
 
-function DialogoGasto({ cerrar }: { cerrar: () => void }) {
+function Movimiento({ l, saldo, abrir }: { l: LineaCaja; saldo: number; abrir: () => void }) {
+  const entra = l.monto > 0
+  return (
+    <li className={`lt lt-${l.tipo} ${entra ? 'lt-entra' : 'lt-sale'}`}>
+      <span className="lt-hora">{hora(l.hora)}</span>
+      <span className="lt-punto" aria-hidden="true">{entra ? <ArrowDownLeft size={13} /> : <ArrowUpRight size={13} />}</span>
+      <button className="lt-texto" onClick={abrir} disabled={!l.reserva}>
+        <strong>{l.concepto}</strong>
+        <small>{l.detalle} · {metodos[l.metodo]}</small>
+      </button>
+      <span className="lt-monto">{entra ? '+' : '−'}{pesos(Math.abs(l.monto))}</span>
+      <span className="lt-saldo">{l.metodo === 'efectivo' ? pesos(saldo) : ''}</span>
+    </li>
+  )
+}
+
+export function DialogoGasto({ cerrar }: { cerrar: () => void }) {
   const [categoria, setCategoria] = useState<string>('Otros')
   const [concepto, setConcepto] = useState('')
   const [monto, setMonto] = useState('')
@@ -190,10 +187,12 @@ function DialogoGasto({ cerrar }: { cerrar: () => void }) {
           cerrar()
         }}
       >
-        <label className="campo">
+        <div className="campo">
           Categoría
-          <select value={categoria} onChange={(ev) => setCategoria(ev.target.value)}>{negocio.categoriasGasto.map((c) => <option key={c}>{c}</option>)}</select>
-        </label>
+          <div className="chips-filtro">
+            {negocio.categoriasGasto.map((c) => <button key={c} type="button" className={categoria === c ? 'activa' : ''} onClick={() => setCategoria(c)}>{c}</button>)}
+          </div>
+        </div>
         <label className="campo">
           Concepto
           <input value={concepto} onChange={(ev) => setConcepto(ev.target.value)} placeholder="Ej.: arreglo de la red de la cancha 3" />
@@ -208,7 +207,7 @@ function DialogoGasto({ cerrar }: { cerrar: () => void }) {
             <select value={metodo} onChange={(ev) => setMetodo(ev.target.value as Metodo)}>{Object.entries(metodos).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           </label>
         </div>
-        <p className="ayuda">Las compras de mercadería se cargan desde Cantina y stock, así también suben el stock.</p>
+        <p className="ayuda">{metodo === 'efectivo' ? 'Sale del cajón: se descuenta del efectivo esperado.' : 'No toca el cajón, pero cuenta en el resultado del día.'} Las compras de mercadería se cargan en Compras, así también suben el stock.</p>
         <div className="acciones-fila">
           <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
           <button className="boton boton-primario" disabled={!monto}>Guardar gasto</button>
@@ -218,73 +217,122 @@ function DialogoGasto({ cerrar }: { cerrar: () => void }) {
   )
 }
 
-function DialogoVenta({ cerrar }: { cerrar: () => void }) {
-  const [metodo, setMetodo] = useState<Metodo>('efectivo')
-  const [hechas, setHechas] = useState<string[]>([])
-  return (
-    <Dialogo abierto cerrar={cerrar} titulo="Vender en el mostrador" ancho={600}>
-      <div className="segmentos segmentos-ancho">
-        {(Object.keys(metodos) as Metodo[]).map((m) => <button key={m} className={metodo === m ? 'activa' : ''} onClick={() => setMetodo(m)}>{metodos[m]}</button>)}
-      </div>
-      <div className="productos-grilla">
-        {negocio.cantina.map((it) => (
-          <button
-            key={it.id}
-            className="producto-boton"
-            onClick={() => {
-              vender({ dia: hoyClave(), hora: ahoraMin(), itemId: it.id, monto: it.precio, metodo, cantidad: 1 })
-              setHechas([it.nombre, ...hechas].slice(0, 4))
-            }}
-          >
-            <strong>{it.nombre}</strong>
-            <span>{pesos(it.precio)}</span>
-          </button>
-        ))}
-      </div>
-      <p className="ayuda">{hechas.length ? `Vendido: ${hechas.join(', ')}. El stock ya se descontó.` : 'Cada toque es una venta cobrada y descuenta los insumos de la receta.'}</p>
-      <div className="acciones-fila"><button className="boton boton-primario" onClick={cerrar}>Listo</button></div>
-    </Dialogo>
-  )
-}
-
-function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
+function DialogoRetiro({ cerrar }: { cerrar: () => void }) {
   const e = useDatos()
-  const [contado, setContado] = useState('')
-  const lineas = movimientosCaja(e, dia).filter((l) => l.metodo === 'efectivo')
-  const entro = lineas.filter((l) => l.monto > 0).reduce((s, l) => s + l.monto, 0)
-  const salio = -lineas.filter((l) => l.monto < 0).reduce((s, l) => s + l.monto, 0)
-  const esperado = efectivoEsperado(e, dia)
-  const dif = contado === '' ? null : Number(contado) - esperado
+  const hay = resumenCaja(e, hoyClave()).esperado
+  const [tipo, setTipo] = useState<'retiro' | 'ingreso'>('retiro')
+  const [monto, setMonto] = useState('')
+  const [motivo, setMotivo] = useState('Retiro para depositar en el banco')
+  const [quien, setQuien] = useState(negocio.cajeros[0])
+  const motivos = tipo === 'retiro' ? ['Retiro para depositar en el banco', 'Se lo lleva el dueño', 'Pago en mano a un proveedor'] : ['Cambio extra en billetes chicos', 'Devolución de un adelanto']
   return (
-    <Dialogo abierto cerrar={cerrar} titulo="Cerrar caja">
-      <dl className="ficha ficha-compacta">
-        <div><dt>Cambio al abrir</dt><dd>{pesos(negocio.cajaInicial)}</dd></div>
-        <div><dt>Entró en efectivo</dt><dd className="bien">+{pesos(entro)}</dd></div>
-        <div><dt>Salió en efectivo</dt><dd className="mal">−{pesos(salio)}</dd></div>
-        <div className="ficha-total"><dt>Tendría que haber</dt><dd>{pesos(esperado)}</dd></div>
-      </dl>
+    <Dialogo abierto cerrar={cerrar} titulo="Retiro o ingreso de efectivo">
       <form
         className="formulario"
         onSubmit={(ev) => {
           ev.preventDefault()
-          cerrarCaja(dia, Number(contado))
+          registrarRetiro({ tipo, monto: Number(monto), motivo, quien })
           cerrar()
         }}
       >
+        <div className="segmentos segmentos-ancho">
+          <button type="button" className={tipo === 'retiro' ? 'activa' : ''} onClick={() => { setTipo('retiro'); setMotivo('Retiro para depositar en el banco') }}>Saco plata</button>
+          <button type="button" className={tipo === 'ingreso' ? 'activa' : ''} onClick={() => { setTipo('ingreso'); setMotivo('Cambio extra en billetes chicos') }}>Pongo plata</button>
+        </div>
         <label className="campo">
-          Efectivo contado
-          <input type="number" inputMode="numeric" min={0} required autoFocus value={contado} onChange={(ev) => setContado(ev.target.value)} />
+          Monto
+          <input type="number" inputMode="numeric" min={1} required autoFocus value={monto} onChange={(ev) => setMonto(ev.target.value)} />
+          <small className={tipo === 'retiro' && Number(monto) > hay ? 'mal' : 'tenue'}>En el cajón hay {pesos(hay)}{tipo === 'retiro' && Number(monto) > hay ? ': no podés sacar más que eso.' : '.'}</small>
         </label>
-        {dif !== null && (
-          <p className={`arqueo ${dif === 0 ? 'arqueo-justo' : dif > 0 ? 'arqueo-sobra' : 'arqueo-falta'}`}>
-            {dif === 0 ? 'Justo, la caja cierra perfecta.' : dif > 0 ? `Sobran ${pesos(dif)}.` : `Faltan ${pesos(-dif)}.`}
-          </p>
-        )}
+        <div className="campo">
+          Motivo
+          <div className="chips-filtro">{motivos.map((m) => <button key={m} type="button" className={motivo === m ? 'activa' : ''} onClick={() => setMotivo(m)}>{m}</button>)}</div>
+        </div>
+        <label className="campo">
+          Quién
+          <select value={quien} onChange={(ev) => setQuien(ev.target.value)}>{negocio.cajeros.map((c) => <option key={c}>{c}</option>)}</select>
+        </label>
         <div className="acciones-fila">
           <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
-          <button className="boton boton-primario" disabled={contado === ''}>Cerrar la caja</button>
+          <button className="boton boton-primario" disabled={!monto || (tipo === 'retiro' && Number(monto) > hay)}>Guardar</button>
         </div>
       </form>
+    </Dialogo>
+  )
+}
+
+const billetes = [20000, 10000, 2000, 1000, 500, 200, 100]
+
+/** Cierre a ciegas: se cuentan los billetes y recién al final se ve si sobra o falta. */
+function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
+  const e = useDatos()
+  const r = resumenCaja(e, dia)
+  const [cant, setCant] = useState<Record<number, number>>({})
+  const [monedas, setMonedas] = useState('')
+  const [ver, setVer] = useState(false)
+  const [cajero, setCajero] = useState(negocio.cajeros[0])
+  const contado = billetes.reduce((s, b) => s + b * (cant[b] ?? 0), 0) + (Number(monedas) || 0)
+  const dif = contado - r.esperado
+  const efe = r.lineas.filter((l) => l.metodo === 'efectivo')
+  const set = (b: number, n: number) => setCant({ ...cant, [b]: Math.max(0, n) })
+  return (
+    <Dialogo abierto cerrar={cerrar} titulo="Cerrar caja" ancho={560}>
+      {!ver ? (
+        <>
+          <p className="ayuda">Contá los billetes del cajón. El sistema no te dice cuánto tendría que haber hasta que termines, así el conteo es honesto.</p>
+          <ul className="billetes">
+            {billetes.map((b) => (
+              <li key={b}>
+                <span className={`billete billete-${b}`}><Banknote size={16} aria-hidden="true" /> {pesos(b)}</span>
+                <span className="paso-a-paso">
+                  <button type="button" aria-label={`Un billete menos de ${b}`} onClick={() => set(b, (cant[b] ?? 0) - 1)}><Minus size={15} /></button>
+                  <input type="number" inputMode="numeric" min={0} value={cant[b] ?? 0} onChange={(ev) => set(b, Number(ev.target.value))} aria-label={`Billetes de ${b}`} />
+                  <button type="button" aria-label={`Un billete más de ${b}`} onClick={() => set(b, (cant[b] ?? 0) + 1)}><Plus size={15} /></button>
+                </span>
+                <strong>{pesos(b * (cant[b] ?? 0))}</strong>
+              </li>
+            ))}
+            <li>
+              <span className="billete">Monedas y sueltos</span>
+              <input className="input-monedas" type="number" inputMode="numeric" min={0} value={monedas} onChange={(ev) => setMonedas(ev.target.value)} aria-label="Monedas" placeholder="0" />
+              <strong>{pesos(Number(monedas) || 0)}</strong>
+            </li>
+          </ul>
+          <div className="contado-total"><span>Contaste</span><strong>{pesos(contado)}</strong></div>
+          <div className="acciones-fila">
+            <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
+            <button className="boton boton-primario" disabled={!contado} onClick={() => setVer(true)}>Listo, ver el resultado</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={`arqueo-grande ${dif === 0 ? 'arqueo-justo' : dif > 0 ? 'arqueo-sobra' : 'arqueo-falta'}`}>
+            <span>{dif === 0 ? 'La caja cierra justa' : dif > 0 ? 'Sobran' : 'Faltan'}</span>
+            {dif !== 0 && <strong>{pesos(Math.abs(dif))}</strong>}
+          </div>
+          <dl className="ficha ficha-compacta">
+            <div><dt>Cambio al abrir</dt><dd>{pesos(negocio.cajaInicial)}</dd></div>
+            <div><dt>Entró en efectivo</dt><dd className="bien">+{pesos(efe.filter((l) => l.monto > 0).reduce((s, l) => s + l.monto, 0))}</dd></div>
+            <div><dt>Salió en efectivo (gastos y retiros)</dt><dd className="mal"><Menos n={-efe.filter((l) => l.monto < 0).reduce((s, l) => s + l.monto, 0)} /></dd></div>
+            <div><dt>Tendría que haber</dt><dd>{pesos(r.esperado)}</dd></div>
+            <div className="ficha-total"><dt>Contaste</dt><dd>{pesos(contado)}</dd></div>
+          </dl>
+          <div className="digitales">
+            {(['mercadopago', 'transferencia'] as Metodo[]).map((m) => (
+              <p key={m}><span>{metodos[m]} según el sistema</span><strong>{pesos(r.ventas.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0))}</strong></p>
+            ))}
+            <small>Controlalo con la app de Mercado Pago y el home banking: no pasa por el cajón.</small>
+          </div>
+          <label className="campo">
+            Cierra
+            <select value={cajero} onChange={(ev) => setCajero(ev.target.value)}>{negocio.cajeros.map((c) => <option key={c}>{c}</option>)}</select>
+          </label>
+          <div className="acciones-fila">
+            <button type="button" className="boton" onClick={() => setVer(false)}>Volver a contar</button>
+            <button className="boton boton-primario" onClick={() => { cerrarCaja(dia, contado, cajero); cerrar() }}>Cerrar la caja</button>
+          </div>
+        </>
+      )}
     </Dialogo>
   )
 }

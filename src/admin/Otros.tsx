@@ -1,6 +1,7 @@
+import { Cabecera } from './comun'
 import { useMemo, useState } from 'react'
 import { negocio } from '../config/negocio'
-import { capital, deClave, diaMes, fechaCorta, hora, hoyClave, pct, pesos, sumarDias } from '../lib/formato'
+import { deClave, diaMes, hora, hoyClave, mesAño, pct, pesos, sumarDias } from '../lib/formato'
 import { aceptarSolicitud, darDeBajaFijo, ocupada, rechazarSolicitud, useDatos } from '../lib/datos'
 
 const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
@@ -65,21 +66,29 @@ export function Fijos() {
         </section>
       )}
 
-      <table className="tabla tabla-tarjetas tabla-fijos">
-        <thead><tr><th>Día</th><th className="num">Hora</th><th>Cancha</th><th>Titular</th><th>Desde</th><th /></tr></thead>
-        <tbody>
-          {ordenados.map((f) => (
-            <tr key={f.id}>
-              <td>{dias[f.dow]}</td>
-              <td className="num">{hora(f.inicio)}</td>
-              <td>{negocio.canchas.find((c) => c.id === f.canchaId)!.nombre}</td>
-              <td><strong>{f.titular}</strong><small>{f.telefono}</small></td>
-              <td>{capital(fechaCorta(f.desde))} {f.desde.slice(0, 4)}</td>
-              <td className="num"><button className="boton boton-chico" onClick={() => darDeBajaFijo(f.id)}>Dar de baja</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="fijos-semana">
+        {[1, 2, 3, 4, 5, 6, 0].map((dow) => {
+          const delDia = ordenados.filter((f) => f.dow === dow)
+          if (!delDia.length) return null
+          return (
+            <section key={dow} className="fijos-dia">
+              <h2>{dias[dow]} <span>{delDia.length} {delDia.length === 1 ? 'turno' : 'turnos'}</span></h2>
+              <ul>
+                {delDia.map((f) => (
+                  <li key={f.id}>
+                    <span className="fijo-hora">{hora(f.inicio)}</span>
+                    <span className="fijo-texto">
+                      <strong>{f.titular}</strong>
+                      <small>{negocio.canchas.find((c) => c.id === f.canchaId)!.nombre} · desde {mesAño(f.desde)} · {f.telefono}</small>
+                    </span>
+                    <button className="boton boton-chico" onClick={() => darDeBajaFijo(f.id)}>Dar de baja</button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -124,12 +133,7 @@ export function Reportes() {
 
   return (
     <div className="pantalla">
-      <div className="titulo-fila">
-        <div>
-          <h1>Reportes</h1>
-          <p>Últimas 4 semanas, del {diaMes(desde)} al {diaMes(hoy)}, contra las 4 anteriores</p>
-        </div>
-      </div>
+      <Cabecera seccion="plata" titulo="Reportes" frase={<>Últimas 4 semanas, del {diaMes(desde)} al {diaMes(hoy)}, contra las 4 anteriores.</>} />
       <div className="kpis">
         <div className="kpi"><span>Ingresos por canchas</span><strong>{pesos(r.ingresos)}</strong><small className={cambio >= 0 ? 'bien' : 'mal'}>{cambio >= 0 ? '+' : '−'}{pct(Math.abs(cambio))} contra las 4 semanas anteriores</small></div>
         <div className="kpi"><span>Ocupación</span><strong>{pct(ocupacion)}</strong><small>{r.periodo.length} turnos jugados o reservados</small></div>

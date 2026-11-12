@@ -1,6 +1,6 @@
 // Tipos, datos de demo y estado del complejo. Todo vive en el navegador (localStorage).
 import { useSyncExternalStore } from 'react'
-import { negocio, precioDe } from '../config/negocio'
+import { negocio, precioDe, type Insumo, type ItemCantina, type LineaReceta } from '../config/negocio'
 import { ahoraMin, deClave, hoyClave, sumarDias } from './formato'
 import { fixtureEliminacion, fixtureLiga, fixtureTorneo, resolver as resolverLlave, setsAlAzar, type Competencia, type Pareja, type Sets } from './competencias'
 
@@ -43,7 +43,9 @@ export type Cuenta = { reservaId: string; nombres: string[]; consumos: Consumo[]
 export type MovStock = { id: string; dia: string; hora: number; insumoId: string; cantidad: number; motivo: 'venta' | 'compra' | 'ajuste'; detalle: string }
 export type Compra = { id: string; dia: string; proveedor: string; items: { insumoId: string; cantidad: number; costo: number }[]; total: number; metodo: Metodo }
 export type Gasto = { id: string; dia: string; hora: number; categoria: string; concepto: string; monto: number; metodo: Metodo; compraId?: string }
-export type Cierre = { dia: string; apertura: number; contado: number; hora: number }
+export type Cierre = { dia: string; apertura: number; contado: number; hora: number; cajero: string; abrio: number }
+/** Plata en efectivo que se saca de la caja (para depositar, pagarle a alguien) o que se pone (cambio extra). */
+export type Retiro = { id: string; dia: string; hora: number; tipo: 'retiro' | 'ingreso'; monto: number; motivo: string; quien: string }
 export type Solicitud = { id: string; nombre: string; telefono: string; dow: number; inicio: number; creada: string }
 
 export type Estado = {
@@ -61,9 +63,13 @@ export type Estado = {
   gastos: Gasto[]
   cuentas: Cuenta[]
   cierres: Cierre[]
+  retiros: Retiro[]
+  /** La carta y los insumos se pueden editar desde el panel. */
+  productos: ItemCantina[]
+  insumos: Insumo[]
 }
 
-const VERSION = 7
+const VERSION = 8
 const CLAVE = 'tresmuros-demo'
 
 function azar(semilla: number) {
@@ -135,16 +141,21 @@ function generar(): Estado {
     }
   }
 
+  // La carta y los insumos arrancan como están en la configuración; después se editan desde el panel
+  const productos: ItemCantina[] = negocio.cantina.map((p) => ({ ...p, receta: p.receta.map((l) => ({ ...l })) }))
+  const insumos: Insumo[] = negocio.insumos.map((x) => ({ ...x }))
+  const carta = { productos, insumos }
+
   // Ventas de la cantina: más bebidas que comida, y la cocina a la noche
   const mezcla: [string, number][] = [
-    ['agua', 18], ['isotonica', 12], ['cerveza', 16], ['gaseosa', 8], ['fernet', 8], ['hamb-simple', 7], ['hamb-completa', 5],
-    ['lomito', 5], ['papas', 6], ['tostado', 6], ['pelotas', 5], ['grip', 2], ['paleta', 6],
+    ['agua', 18], ['isotonica', 12], ['cerveza', 16], ['gaseosa', 8], ['fernet', 8], ['jarra-fernet', 2], ['hamb-simple', 7], ['hamb-completa', 5],
+    ['lomito', 5], ['papas', 6], ['tostado', 6], ['combo-post', 4], ['balde', 3], ['agua-x4', 3], ['pelotas', 5], ['grip', 2], ['paleta', 6],
   ]
   const totalMezcla = mezcla.reduce((s, [, p]) => s + p, 0)
   const itemAzar = () => {
     let x = r() * totalMezcla
-    for (const [id, p] of mezcla) if ((x -= p) <= 0) return negocio.cantina.find((c) => c.id === id)!
-    return negocio.cantina[0]
+    for (const [id, p] of mezcla) if ((x -= p) <= 0) return productos.find((c) => c.id === id)!
+    return productos[0]
   }
   const metodoAzar = (): Metodo => (r() < 0.45 ? 'efectivo' : r() < 0.7 ? 'mercadopago' : 'transferencia')
   const ventas: Venta[] = []
@@ -153,7 +164,7 @@ function generar(): Estado {
     const cuantas = 10 + Math.floor(r() * 20)
     for (let i = 0; i < cuantas; i++) {
       const it = itemAzar()
-      const h = it.categoria === 'Cocina' ? 1110 + Math.floor(r() * 300) : 600 + Math.floor(r() * 840)
+      const h = it.categoria === 'Cocina' || it.categoria === 'Combos' ? 1110 + Math.floor(r() * 300) : 600 + Math.floor(r() * 840)
       if (d === 0 && h > ahora) continue
       ventas.push({ id: `v${ventas.length}`, dia, hora: h, itemId: it.id, monto: it.precio, metodo: metodoAzar(), cantidad: 1 })
     }
@@ -180,7 +191,7 @@ function generar(): Estado {
   for (const [prov, items] of Object.entries(pedidos)) {
     for (let d = -60 + Math.floor(r() * cada[prov]); d <= -1; d += cada[prov]) {
       const dia = sumarDias(hoy, d)
-      const lista = items.map(([insumoId, cantidad]) => ({ insumoId, cantidad, costo: negocio.insumos.find((x) => x.id === insumoId)!.costo }))
+      const lista = items.map(([insumoId, cantidad]) => ({ insumoId, cantidad, costo: insumos.find((x) => x.id === insumoId)!.costo }))
       const total = Math.round(lista.reduce((s, x) => s + x.cantidad * x.costo, 0) / 100) * 100
       const id = `co${compras.length}`
       const metodo: Metodo = prov === 'Panadería La Espiga' ? 'efectivo' : 'transferencia'
@@ -219,8 +230,8 @@ function generar(): Estado {
 
   // Descuentos de stock de las ventas de hoy, para ver la receta en acción
   for (const v of ventas.filter((x) => x.dia === hoy)) {
-    const it = negocio.cantina.find((c) => c.id === v.itemId)!
-    it.receta.forEach((l) => movimientos.push({ id: `m${movimientos.length}`, dia: hoy, hora: v.hora, insumoId: l.insumoId, cantidad: -l.cantidad, motivo: 'venta', detalle: it.nombre }))
+    const it = productos.find((c) => c.id === v.itemId)!
+    explotar(carta, it.id).forEach((l) => movimientos.push({ id: `m${movimientos.length}`, dia: hoy, hora: v.hora, insumoId: l.insumoId, cantidad: -l.cantidad, motivo: 'venta', detalle: it.nombre }))
   }
 
   // Cuentas abiertas en las canchas que se están jugando o recién terminaron
@@ -243,12 +254,33 @@ function generar(): Estado {
   ]
 
   // Cierres de caja de los días anteriores, con alguna diferencia chica como pasa en la realidad
-  const parcial: Estado = { version: VERSION, generado: hoy, reservas, fijos, ventas, solicitudes, competencias: [], stock, movimientos, compras, gastos, cuentas, cierres: [] }
-  const cierres: Cierre[] = []
-  for (let d = -30; d <= -1; d++) {
+  // Quién tuvo la caja cada día: Marcos y Vicky en la semana, Leo el finde
+  const cajeroDe = (dia: string) => {
+    const dow = deClave(dia).getDay()
+    return dow === 0 || dow === 6 ? 'Leo' : dow % 2 ? 'Marcos' : 'Vicky'
+  }
+  const parcial: Estado = {
+    version: VERSION, generado: hoy, reservas, fijos, ventas, solicitudes, competencias: [], stock, movimientos, compras, gastos, cuentas,
+    cierres: [], retiros: [], productos, insumos,
+  }
+  // Retiros de efectivo: cuando se junta mucha plata en la caja, el encargado saca para depositar
+  const retiros: Retiro[] = []
+  for (let d = -45; d <= 0; d++) {
     const dia = sumarDias(hoy, d)
-    const dif = [0, 0, 0, 0, -500, 1000, -2000, 0][Math.floor(r() * 8)]
-    cierres.push({ dia, apertura: negocio.cajaInicial, contado: efectivoEsperado(parcial, dia) + dif, hora: 1460 })
+    const efectivo = efectivoEsperado(parcial, dia) - negocio.cajaInicial
+    const h = 1170 + Math.floor(r() * 60)
+    if (d === 0 && h > ahora) continue
+    if (efectivo > 120000 && r() < 0.7) {
+      retiros.push({ id: `rt${retiros.length}`, dia, hora: h, tipo: 'retiro', monto: Math.floor((efectivo * 0.6) / 50000) * 50000, motivo: 'Retiro para depositar en el banco', quien: cajeroDe(dia) })
+    }
+    if (r() < 0.12) retiros.push({ id: `rt${retiros.length}`, dia, hora: 600, tipo: 'ingreso', monto: 10000, motivo: 'Cambio extra en billetes chicos', quien: cajeroDe(dia) })
+  }
+  parcial.retiros = retiros
+  const cierres: Cierre[] = []
+  for (let d = -45; d <= -1; d++) {
+    const dia = sumarDias(hoy, d)
+    const dif = r() < 0.8 ? 0 : [-500, 1000, -2000, 500, -1500][Math.floor(r() * 5)]
+    cierres.push({ dia, apertura: negocio.cajaInicial, contado: efectivoEsperado(parcial, dia) + dif, hora: 1465 + Math.floor(r() * 25), cajero: cajeroDe(dia), abrio: 470 + Math.floor(r() * 15) })
   }
   return { ...parcial, competencias: competenciasDeMuestra(hoy, r), cierres }
 }
@@ -352,13 +384,14 @@ export const actualizarReserva = (id: string, c: Partial<Reserva>) =>
   guardar({ ...estado, reservas: estado.reservas.map((x) => (x.id === id ? { ...x, ...c } : x)) })
 /** Descuenta (o devuelve, con veces negativo) del stock los insumos de la receta de un producto. */
 function moverStock(e: Estado, itemId: string, veces: number, detalle: string) {
-  const it = negocio.cantina.find((c) => c.id === itemId)
-  if (!it) return { stock: e.stock, movimientos: e.movimientos }
+  const lineas = explotar(e, itemId, 1)
+  if (!lineas.length) return { stock: e.stock, movimientos: e.movimientos }
   const stock = { ...e.stock }
-  const movs: MovStock[] = it.receta.map((l, i) => {
-    stock[l.insumoId] = (stock[l.insumoId] ?? 0) - l.cantidad * veces
+  const movs: MovStock[] = lineas.map((l, i) => {
+    const cant = Math.round(l.cantidad * veces * 10) / 10
+    stock[l.insumoId] = Math.round(((stock[l.insumoId] ?? 0) - cant) * 10) / 10
     return {
-      id: `m${Date.now()}${i}`, dia: hoyClave(), hora: ahoraMin(), insumoId: l.insumoId, cantidad: -l.cantidad * veces,
+      id: `m${Date.now()}${Math.random().toString(36).slice(2, 6)}${i}`, dia: hoyClave(), hora: ahoraMin(), insumoId: l.insumoId, cantidad: -cant,
       motivo: veces > 0 ? 'venta' : 'ajuste', detalle: veces > 0 ? detalle : `${detalle} (se quitó de la cuenta)`,
     }
   })
@@ -367,8 +400,32 @@ function moverStock(e: Estado, itemId: string, veces: number, detalle: string) {
 
 /** Venta de mostrador: se cobra en el momento y descuenta la receta. */
 export function vender(v: Omit<Venta, 'id'>) {
-  const it = negocio.cantina.find((c) => c.id === v.itemId)
+  const it = productoDe(estado, v.itemId)
   guardar({ ...estado, ...moverStock(estado, v.itemId, v.cantidad ?? 1, it?.nombre ?? v.itemId), ventas: [...estado.ventas, { ...v, id: `v${Date.now()}` }] })
+}
+
+/** Cobra un ticket entero del mostrador: cada línea es una venta y descuenta su receta. */
+export function venderTicket(lineas: { itemId: string; cantidad: number }[], metodo: Metodo) {
+  let e = estado
+  const ventas: Venta[] = []
+  lineas.forEach((l, i) => {
+    const it = productoDe(e, l.itemId)
+    if (!it || l.cantidad <= 0) return
+    e = { ...e, ...moverStock(e, l.itemId, l.cantidad, it.nombre) }
+    ventas.push({ id: `v${Date.now()}${i}`, dia: hoyClave(), hora: ahoraMin(), itemId: l.itemId, monto: it.precio * l.cantidad, metodo, cantidad: l.cantidad })
+  })
+  guardar({ ...e, ventas: [...e.ventas, ...ventas] })
+}
+
+// ——— Carta: productos, recetas e insumos ———
+export function guardarProducto(p: ItemCantina) {
+  const existe = estado.productos.some((x) => x.id === p.id)
+  guardar({ ...estado, productos: existe ? estado.productos.map((x) => (x.id === p.id ? p : x)) : [...estado.productos, p] })
+}
+export const borrarProducto = (id: string) => guardar({ ...estado, productos: estado.productos.filter((x) => x.id !== id) })
+export function guardarInsumo(i: Insumo) {
+  const existe = estado.insumos.some((x) => x.id === i.id)
+  guardar({ ...estado, insumos: existe ? estado.insumos.map((x) => (x.id === i.id ? i : x)) : [...estado.insumos, i], stock: { ...estado.stock, [i.id]: estado.stock[i.id] ?? 0 } })
 }
 
 // ——— Cuenta de la cancha ———
@@ -376,40 +433,73 @@ export const cuentaDe = (e: Estado, reservaId: string): Cuenta => {
   const c = e.cuentas.find((x) => x.reservaId === reservaId)
   if (c) return c
   const r = e.reservas.find((x) => x.id === reservaId)
-  return { reservaId, nombres: r ? [r.titular.split(' ')[0]] : [], consumos: [], pagos: [], modo: 'partes', partes: 4 }
+  // En el pádel juegan cuatro: el titular y tres lugares para poner el nombre
+  return { reservaId, nombres: [r ? r.titular.split(' ')[0] : 'Titular', 'Jugador 2', 'Jugador 3', 'Jugador 4'], consumos: [], pagos: [], modo: 'partes', partes: 4 }
 }
 const conCuenta = (e: Estado, c: Cuenta) => [...e.cuentas.filter((x) => x.reservaId !== c.reservaId), c]
 
 export function agregarConsumo(reservaId: string, itemId: string, quien: string | null) {
   const c = cuentaDe(estado, reservaId)
-  const it = negocio.cantina.find((x) => x.id === itemId)!
-  const nueva = { ...c, consumos: [...c.consumos, { id: `cc${Date.now()}`, itemId, quien, hora: ahoraMin() }] }
+  const it = productoDe(estado, itemId)!
+  const nueva = { ...c, consumos: [...c.consumos, { id: `cc${Date.now()}${Math.random().toString(36).slice(2, 6)}`, itemId, quien, hora: ahoraMin() }] }
   guardar({ ...estado, ...moverStock(estado, itemId, 1, it.nombre), cuentas: conCuenta(estado, nueva) })
 }
 export function quitarConsumo(reservaId: string, consumoId: string) {
   const c = cuentaDe(estado, reservaId)
   const x = c.consumos.find((k) => k.id === consumoId)
   if (!x) return
-  const it = negocio.cantina.find((k) => k.id === x.itemId)!
-  guardar({ ...estado, ...moverStock(estado, x.itemId, -1, it.nombre), cuentas: conCuenta(estado, { ...c, consumos: c.consumos.filter((k) => k.id !== consumoId) }) })
+  const it = productoDe(estado, x.itemId)
+  guardar({ ...estado, ...moverStock(estado, x.itemId, -1, it?.nombre ?? x.itemId), cuentas: conCuenta(estado, { ...c, consumos: c.consumos.filter((k) => k.id !== consumoId) }) })
 }
 export const ajustarCuenta = (reservaId: string, cambios: Partial<Pick<Cuenta, 'nombres' | 'modo' | 'partes'>>) =>
   guardar({ ...estado, cuentas: conCuenta(estado, { ...cuentaDe(estado, reservaId), ...cambios }) })
+
+/** Cambia el nombre de un jugador en toda la cuenta: lo que consumió y lo que pagó quedan a su nombre nuevo. */
+export function renombrarJugador(reservaId: string, viejo: string, nuevo: string) {
+  const c = cuentaDe(estado, reservaId)
+  const n = nuevo.trim()
+  if (!n || n === viejo || c.nombres.includes(n)) return
+  guardar({
+    ...estado,
+    cuentas: conCuenta(estado, {
+      ...c,
+      nombres: c.nombres.map((x) => (x === viejo ? n : x)),
+      consumos: c.consumos.map((x) => (x.quien === viejo ? { ...x, quien: n } : x)),
+      pagos: c.pagos.map((x) => (x.nombre === viejo ? { ...x, nombre: n } : x)),
+    }),
+  })
+}
+/** Entre cuántos se divide: agrega lugares "Jugador N" o saca los últimos que no pagaron ni consumieron. */
+export function cuantosJuegan(reservaId: string, n: number) {
+  const c = cuentaDe(estado, reservaId)
+  let nombres = [...c.nombres]
+  for (let i = nombres.length; i < n; i++) {
+    let k = i + 1
+    while (nombres.includes(`Jugador ${k}`)) k++
+    nombres.push(`Jugador ${k}`)
+  }
+  while (nombres.length > n) {
+    const ult = nombres[nombres.length - 1]
+    if (c.pagos.some((p) => p.nombre === ult)) break
+    nombres = nombres.slice(0, -1)
+  }
+  guardar({ ...estado, cuentas: conCuenta(estado, { ...c, nombres, partes: nombres.length, consumos: c.consumos.map((x) => (x.quien && !nombres.includes(x.quien) ? { ...x, quien: null } : x)) }) })
+}
 
 /** Lo que tiene que pagar cada uno: el saldo de la cancha se divide entre todos; lo de cada uno, a su nombre. */
 export function repartoCuenta(e: Estado, reservaId: string) {
   const r = e.reservas.find((x) => x.id === reservaId)!
   const c = cuentaDe(e, reservaId)
-  const precioDeItem = (id: string) => negocio.cantina.find((x) => x.id === id)?.precio ?? 0
+  const precioDeItem = (id: string) => productoDe(e, id)?.precio ?? 0
   const saldoCancha = r.estado === 'pagada' && !r.porCuenta ? 0 : r.precio - r.seña
   const consumos = c.consumos.reduce((s, x) => s + precioDeItem(x.itemId), 0)
   const total = saldoCancha + consumos
   let partes: { nombre: string; monto: number; detalle: string }[]
   if (c.modo === 'partes') {
-    const n = Math.max(1, c.partes)
+    const n = Math.max(1, c.nombres.length)
     const base = Math.ceil(total / n / 100) * 100
     partes = Array.from({ length: n }, (_, i) => ({
-      nombre: c.nombres[i] ?? `Jugador ${i + 1}`,
+      nombre: c.nombres[i],
       monto: i === n - 1 ? total - base * (n - 1) : base,
       detalle: `1/${n} de la cancha y lo consumido`,
     }))
@@ -420,7 +510,7 @@ export function repartoCuenta(e: Estado, reservaId: string) {
     partes = gente.map((g) => {
       const suyo = c.consumos.filter((x) => x.quien === g)
       const monto = Math.round((porCabeza + suyo.reduce((s, x) => s + precioDeItem(x.itemId), 0)) / 100) * 100
-      return { nombre: g, monto, detalle: suyo.length ? suyo.map((x) => negocio.cantina.find((k) => k.id === x.itemId)?.nombre).join(', ') : 'Su parte de la cancha' }
+      return { nombre: g, monto, detalle: suyo.length ? suyo.map((x) => productoDe(e, x.itemId)?.nombre).join(', ') : 'Su parte de la cancha' }
     })
   }
   return { cuenta: c, saldoCancha, consumos, total, partes, pagado: c.pagos.reduce((s, p) => s + p.monto, 0) }
@@ -434,7 +524,7 @@ export function cobrarParte(reservaId: string, nombre: string, monto: number, me
   const completo = rep.partes.every((p) => nueva.pagos.some((x) => x.nombre === p.nombre))
   if (!completo) return guardar({ ...estado, cuentas: conCuenta(estado, nueva) })
   const ventas: Venta[] = c.consumos.map((x, i) => ({
-    id: `v${Date.now()}${i}`, dia: hoyClave(), hora: x.hora, itemId: x.itemId, monto: negocio.cantina.find((k) => k.id === x.itemId)?.precio ?? 0,
+    id: `v${Date.now()}${i}`, dia: hoyClave(), hora: x.hora, itemId: x.itemId, monto: productoDe(estado, x.itemId)?.precio ?? 0,
     metodo, cantidad: 1, reservaId, quien: x.quien ?? undefined,
   }))
   guardar({
@@ -451,9 +541,15 @@ export function cargarCompra(proveedor: string, items: { insumoId: string; canti
   const total = Math.round(items.reduce((s, x) => s + x.cantidad * x.costo, 0))
   const stock = { ...estado.stock }
   items.forEach((x) => (stock[x.insumoId] = (stock[x.insumoId] ?? 0) + x.cantidad))
+  // Si el proveedor cambió el precio, el costo del insumo se actualiza y las recetas se recalculan solas
+  const insumos = estado.insumos.map((i) => {
+    const it = items.find((x) => x.insumoId === i.id)
+    return it && it.costo !== i.costo ? { ...i, costo: it.costo } : i
+  })
   guardar({
     ...estado,
     stock,
+    insumos,
     compras: [...estado.compras, { id, dia: hoyClave(), proveedor, items, total, metodo }],
     gastos: [...estado.gastos, { id: `g${Date.now()}`, dia: hoyClave(), hora: ahoraMin(), categoria: 'Mercadería', concepto: `Compra a ${proveedor}`, monto: total, metodo, compraId: id }],
     movimientos: [
@@ -462,19 +558,21 @@ export function cargarCompra(proveedor: string, items: { insumoId: string; canti
     ],
   })
 }
-export function ajustarStock(insumoId: string, contado: number) {
+export function ajustarStock(insumoId: string, contado: number, detalle = 'Conteo físico') {
   const dif = contado - (estado.stock[insumoId] ?? 0)
   if (!dif) return
   guardar({
     ...estado,
     stock: { ...estado.stock, [insumoId]: contado },
-    movimientos: [...estado.movimientos, { id: `m${Date.now()}`, dia: hoyClave(), hora: ahoraMin(), insumoId, cantidad: dif, motivo: 'ajuste', detalle: 'Conteo físico' }],
+    movimientos: [...estado.movimientos, { id: `m${Date.now()}`, dia: hoyClave(), hora: ahoraMin(), insumoId, cantidad: dif, motivo: 'ajuste', detalle }],
   })
 }
 export const registrarGasto = (g: Omit<Gasto, 'id' | 'dia' | 'hora'>) =>
   guardar({ ...estado, gastos: [...estado.gastos, { ...g, id: `g${Date.now()}`, dia: hoyClave(), hora: ahoraMin() }] })
-export const cerrarCaja = (dia: string, contado: number) =>
-  guardar({ ...estado, cierres: [...estado.cierres.filter((c) => c.dia !== dia), { dia, apertura: negocio.cajaInicial, contado, hora: ahoraMin() }] })
+export const registrarRetiro = (x: Omit<Retiro, 'id' | 'dia' | 'hora'>) =>
+  guardar({ ...estado, retiros: [...estado.retiros, { ...x, id: `rt${Date.now()}`, dia: hoyClave(), hora: ahoraMin() }] })
+export const cerrarCaja = (dia: string, contado: number, cajero: string) =>
+  guardar({ ...estado, cierres: [...estado.cierres.filter((c) => c.dia !== dia), { dia, apertura: negocio.cajaInicial, contado, hora: ahoraMin(), cajero, abrio: 480 }] })
 
 export const pedirFijo = (s: Omit<Solicitud, 'id' | 'creada'>) =>
   guardar({ ...estado, solicitudes: [...estado.solicitudes, { ...s, id: `s${Date.now()}`, creada: hoyClave() }] })
@@ -513,15 +611,22 @@ export const cargarResultado = (competenciaId: string, partidoId: string, sets: 
 
 // ——— Consultas ———
 
-export type LineaCaja = { id: string; hora: number; tipo: 'cancha' | 'cantina' | 'gasto'; concepto: string; detalle: string; metodo: Metodo; monto: number; reserva?: string }
+export type LineaCaja = { id: string; hora: number; tipo: 'cancha' | 'cantina' | 'gasto' | 'retiro'; concepto: string; detalle: string; metodo: Metodo; monto: number; reserva?: string }
 
-/** Todo lo que entró y salió de la caja en un día. Los gastos van en negativo. */
+export function productoDe(e: Pick<Estado, 'productos'>, id: string) {
+  return e.productos.find((x) => x.id === id)
+}
+export function insumoDe(e: Pick<Estado, 'insumos'>, id: string) {
+  return e.insumos.find((x) => x.id === id)
+}
+
+/** Todo lo que entró y salió de la caja en un día. Los gastos y retiros van en negativo. */
 export function movimientosCaja(e: Estado, dia: string): LineaCaja[] {
   const cancha = (id: string) => negocio.canchas.find((c) => c.id === id)!.nombre
   const lineas: LineaCaja[] = []
   for (const r of e.reservas.filter((x) => x.dia === dia && x.estado !== 'cancelada')) {
     if (r.seña > 0)
-      lineas.push({ id: `s${r.id}`, hora: Math.max(480, r.inicio - 120), tipo: 'cancha', concepto: `${cancha(r.canchaId)} · ${r.titular}`, detalle: 'Seña del turno', metodo: 'mercadopago', monto: r.seña, reserva: r.id })
+      lineas.push({ id: `s${r.id}`, hora: dia === hoyClave() ? Math.min(Math.max(480, r.inicio - 120), Math.max(480, ahoraMin())) : Math.max(480, r.inicio - 120), tipo: 'cancha', concepto: `${cancha(r.canchaId)} · ${r.titular}`, detalle: 'Seña del turno', metodo: 'mercadopago', monto: r.seña, reserva: r.id })
     if (r.estado === 'pagada' && !r.porCuenta)
       lineas.push({ id: r.id, hora: r.inicio + negocio.duracion, tipo: 'cancha', concepto: `${cancha(r.canchaId)} · ${r.titular}`, detalle: 'Saldo del turno', metodo: r.metodo ?? 'efectivo', monto: r.precio - r.seña, reserva: r.id })
   }
@@ -533,11 +638,14 @@ export function movimientosCaja(e: Estado, dia: string): LineaCaja[] {
     )
   }
   for (const v of e.ventas.filter((x) => x.dia === dia && !x.reservaId)) {
-    const it = negocio.cantina.find((c) => c.id === v.itemId)
-    lineas.push({ id: v.id, hora: v.hora, tipo: 'cantina', concepto: it?.nombre ?? v.itemId, detalle: `Cantina · ${it?.categoria ?? ''}`, metodo: v.metodo, monto: v.monto })
+    const it = productoDe(e, v.itemId)
+    const n = v.cantidad ?? 1
+    lineas.push({ id: v.id, hora: v.hora, tipo: 'cantina', concepto: `${n > 1 ? `${n} × ` : ''}${it?.nombre ?? v.itemId}`, detalle: `Cantina · ${it?.categoria ?? ''}`, metodo: v.metodo, monto: v.monto })
   }
   for (const g of e.gastos.filter((x) => x.dia === dia))
     lineas.push({ id: g.id, hora: g.hora, tipo: 'gasto', concepto: g.concepto, detalle: g.categoria, metodo: g.metodo, monto: -g.monto })
+  for (const x of (e.retiros ?? []).filter((k) => k.dia === dia))
+    lineas.push({ id: x.id, hora: x.hora, tipo: 'retiro', concepto: x.motivo, detalle: `${x.tipo === 'retiro' ? 'Retiro' : 'Ingreso'} de efectivo · ${x.quien}`, metodo: 'efectivo', monto: x.tipo === 'retiro' ? -x.monto : x.monto })
   return lineas.sort((a, b) => b.hora - a.hora)
 }
 
@@ -546,12 +654,67 @@ export function efectivoEsperado(e: Estado, dia: string) {
   return negocio.cajaInicial + movimientosCaja(e, dia).filter((l) => l.metodo === 'efectivo').reduce((s, l) => s + l.monto, 0)
 }
 
-/** Costo de un producto según su receta, su margen y cuántos se pueden hacer con el stock de hoy. */
+/** El resumen de un día de caja: lo que entró, lo que salió (sin contar retiros, que no son gastos) y el arqueo. */
+export function resumenCaja(e: Estado, dia: string) {
+  const lineas = movimientosCaja(e, dia)
+  const ventas = lineas.filter((l) => l.monto > 0 && l.tipo !== 'retiro')
+  const salidas = lineas.filter((l) => l.monto < 0 && l.tipo !== 'retiro')
+  const retiros = lineas.filter((l) => l.tipo === 'retiro')
+  const entro = ventas.reduce((s, l) => s + l.monto, 0)
+  const salio = -salidas.reduce((s, l) => s + l.monto, 0) || 0
+  const canchas = ventas.filter((l) => l.tipo === 'cancha').reduce((s, l) => s + l.monto, 0)
+  const esperado = efectivoEsperado(e, dia)
+  const cierre = e.cierres.find((c) => c.dia === dia)
+  return { lineas, ventas, salidas, retiros, entro, salio, canchas, cantina: entro - canchas, esperado, cierre, diferencia: cierre ? cierre.contado - esperado : null }
+}
+
+/**
+ * Lo que se descuenta del stock al vender `veces` unidades de un producto.
+ * Abre los combos (productos dentro de productos) y suma la merma de cada insumo.
+ */
+export function explotarReceta(e: Pick<Estado, 'productos' | 'insumos'>, receta: LineaReceta[], veces = 1, prof = 0): { insumoId: string; cantidad: number }[] {
+  const suma = new Map<string, number>()
+  for (const l of receta) {
+    if (l.productoId) {
+      const p = productoDe(e, l.productoId)
+      if (!p || prof > 3) continue
+      for (const x of explotarReceta(e, p.receta, l.cantidad * veces, prof + 1)) suma.set(x.insumoId, (suma.get(x.insumoId) ?? 0) + x.cantidad)
+    } else if (l.insumoId) {
+      const merma = insumoDe(e, l.insumoId)?.merma ?? 0
+      suma.set(l.insumoId, (suma.get(l.insumoId) ?? 0) + (l.cantidad / (1 - merma)) * veces)
+    }
+  }
+  return [...suma].map(([insumoId, cantidad]) => ({ insumoId, cantidad: Math.round(cantidad * 10) / 10 }))
+}
+export function explotar(e: Pick<Estado, 'productos' | 'insumos'>, itemId: string, veces = 1) {
+  return explotarReceta(e, productoDe(e, itemId)?.receta ?? [], veces)
+}
+
+/** Costo de una receta (aunque no esté guardada todavía), su margen y para cuántos alcanza el stock de hoy. */
+export function costeoReceta(e: Estado, receta: LineaReceta[], precio: number) {
+  const lineas = explotarReceta(e, receta)
+  const costo = lineas.reduce((s, l) => s + l.cantidad * (insumoDe(e, l.insumoId)?.costo ?? 0), 0)
+  let alcanza = Infinity
+  let limita: string | null = null
+  for (const l of lineas) {
+    const n = Math.max(0, Math.floor((e.stock[l.insumoId] ?? 0) / l.cantidad))
+    if (n < alcanza) {
+      alcanza = n
+      limita = l.insumoId
+    }
+  }
+  return { costo, margen: precio ? (precio - costo) / precio : 0, ganancia: precio - costo, foodCost: precio ? costo / precio : 0, alcanza, limita }
+}
 export function costeo(e: Estado, itemId: string) {
-  const it = negocio.cantina.find((c) => c.id === itemId)!
-  const costo = it.receta.reduce((s, l) => s + l.cantidad * (negocio.insumos.find((x) => x.id === l.insumoId)?.costo ?? 0), 0)
-  const alcanza = it.receta.length ? Math.max(0, Math.min(...it.receta.map((l) => Math.floor((e.stock[l.insumoId] ?? 0) / l.cantidad)))) : Infinity
-  return { costo, margen: it.precio ? (it.precio - costo) / it.precio : 0, alcanza }
+  const it = productoDe(e, itemId)
+  return costeoReceta(e, it?.receta ?? [], it?.precio ?? 0)
+}
+
+/** Unidades vendidas de cada producto desde un día (incluye lo consumido en las canchas). */
+export function vendidosDesde(e: Estado, desde: string) {
+  const m = new Map<string, number>()
+  for (const v of e.ventas) if (v.dia >= desde) m.set(v.itemId, (m.get(v.itemId) ?? 0) + (v.cantidad ?? 1))
+  return m
 }
 
 export const ocupada = (e: Estado, canchaId: string, dia: string, inicio: number) =>

@@ -1,31 +1,68 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useOutletContext, useSearchParams } from 'react-router-dom'
-import { BarChart3, CalendarRange, Globe, Menu, Package, Receipt, Repeat, RotateCcw, Trophy, Wallet } from 'lucide-react'
+import { BarChart3, CalendarRange, ChefHat, Globe, History, Menu, Package, Receipt, Repeat, RotateCcw, ShoppingBag, Trophy, Truck, Wallet } from 'lucide-react'
 import { negocio } from '../config/negocio'
-import { ahoraMin, capital, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
-import { actualizarReserva, estados, reiniciar, repartoCuenta, useDatos, vender, type Reserva } from '../lib/datos'
-import { CuentaCancha } from './Cuenta'
-import { bajoMinimo } from './Inventario'
+import { ahoraMin, capital, diaMes, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
+import { actualizarReserva, estados, reiniciar, repartoCuenta, useDatos, type Reserva } from '../lib/datos'
+import { CuentaCobro, CuentaConsumos } from './Cuenta'
+import { bajoMinimo } from './comun'
 import { Dialogo } from '../lib/ui'
 import { CanchaDibujo } from '../lib/cancha'
 
 type Ctx = { verReserva: (id: string) => void }
 export const usePanel = () => useOutletContext<Ctx>()
 
-const menu = [
-  { a: '/admin', texto: 'Canchas del día', icono: CalendarRange, fin: true },
-  { a: '/admin/torneos', texto: 'Torneos y ligas', icono: Trophy },
-  { a: '/admin/fijos', texto: 'Turnos fijos', icono: Repeat },
-  { a: '/admin/caja', texto: 'Caja', icono: Wallet },
-  { a: '/admin/stock', texto: 'Cantina y stock', icono: Package },
-  { a: '/admin/reportes', texto: 'Reportes', icono: BarChart3 },
+// El menú en tres grupos: lo de las canchas, lo de la cantina y lo de la plata
+const menu: { grupo: string; items: { a: string; texto: string; icono: typeof Wallet; fin?: boolean }[] }[] = [
+  {
+    grupo: 'Canchas',
+    items: [
+      { a: '/admin', texto: 'Canchas del día', icono: CalendarRange, fin: true },
+      { a: '/admin/fijos', texto: 'Turnos fijos', icono: Repeat },
+      { a: '/admin/torneos', texto: 'Torneos y ligas', icono: Trophy },
+    ],
+  },
+  {
+    grupo: 'Cantina',
+    items: [
+      { a: '/admin/vender', texto: 'Vender', icono: ShoppingBag },
+      { a: '/admin/productos', texto: 'Productos y recetas', icono: ChefHat },
+      { a: '/admin/subproductos', texto: 'Subproductos', icono: Package },
+      { a: '/admin/compras', texto: 'Compras y proveedores', icono: Truck },
+    ],
+  },
+  {
+    grupo: 'Caja',
+    items: [
+      { a: '/admin/caja', texto: 'Caja de hoy', icono: Wallet, fin: true },
+      { a: '/admin/caja/historial', texto: 'Historial de cajas', icono: History },
+      { a: '/admin/gastos', texto: 'Gastos', icono: Receipt },
+      { a: '/admin/reportes', texto: 'Reportes', icono: BarChart3 },
+    ],
+  },
 ]
+
+/** En el celular: las cuatro cosas que más se usan, abajo, al alcance del pulgar. */
+const barraCelu = [
+  { a: '/admin', texto: 'Canchas', icono: CalendarRange, fin: true },
+  { a: '/admin/vender', texto: 'Vender', icono: ShoppingBag },
+  { a: '/admin/caja', texto: 'Caja', icono: Wallet },
+  { a: '/admin/subproductos', texto: 'Stock', icono: Package },
+]
+
+/** El nombre de la pantalla en la que estás, para la barra de arriba del celular. */
+function seccionActual(ruta: string) {
+  if (ruta.startsWith('/admin/productos/')) return 'Receta'
+  const todos = menu.flatMap((g) => g.items).sort((a, b) => b.a.length - a.a.length)
+  return todos.find((x) => ruta === x.a || ruta.startsWith(x.a + '/'))?.texto ?? 'Panel'
+}
 
 export function Layout() {
   const e = useDatos()
   const [abierto, setAbierto] = useState(false)
   const [reserva, setReserva] = useState<string | null>(null)
   const lugar = useLocation()
+  const faltan = bajoMinimo(e).length
   useEffect(() => {
     document.title = `Panel · ${negocio.nombre}`
     setAbierto(false)
@@ -44,13 +81,18 @@ export function Layout() {
           </span>
         </div>
         <nav className="menu">
-          {menu.map(({ a, texto, icono: I, fin }) => (
-            <NavLink key={a} to={a} end={fin}>
-              <I size={17} strokeWidth={1.8} aria-hidden="true" />
-              {texto}
-              {a === '/admin/fijos' && e.solicitudes.length > 0 && <span className="insignia">{e.solicitudes.length}</span>}
-              {a === '/admin/stock' && bajoMinimo(e.stock).length > 0 && <span className="insignia">{bajoMinimo(e.stock).length}</span>}
-            </NavLink>
+          {menu.map((g) => (
+            <div key={g.grupo} className="menu-grupo">
+              <p className="menu-grupo-titulo">{g.grupo}</p>
+              {g.items.map(({ a, texto, icono: I, fin }) => (
+                <NavLink key={a} to={a} end={fin}>
+                  <I size={17} strokeWidth={1.8} aria-hidden="true" />
+                  {texto}
+                  {a === '/admin/fijos' && e.solicitudes.length > 0 && <span className="insignia" title="Pedidos de turno fijo">{e.solicitudes.length}</span>}
+                  {a === '/admin/subproductos' && faltan > 0 && <span className="insignia" title="Para reponer">{faltan}</span>}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="lateral-pie">
@@ -61,12 +103,27 @@ export function Layout() {
       </aside>
       <header className="superior">
         <button className="btn-icono solo-telefono" onClick={() => setAbierto(!abierto)} aria-label="Menú"><Menu size={20} /></button>
+        <p className="superior-seccion">{seccionActual(lugar.pathname)}</p>
         <p className="superior-texto">{capital(fechaLarga(hoyClave()))}<span className="superior-detalle">, abierto de 8:00 a 00:30</span></p>
         <Link to="/" className="boton boton-chico">Reservar como cliente</Link>
       </header>
       <main className="hoja-admin">
         <Outlet context={ctx} />
       </main>
+      <nav className="barra-celu" aria-label="Accesos rápidos">
+        {barraCelu.map(({ a, texto, icono: I, fin }) => (
+          <NavLink key={a} to={a} end={fin}>
+            <I size={21} strokeWidth={1.8} aria-hidden="true" />
+            <span>{texto}</span>
+            {a === '/admin/subproductos' && faltan > 0 && <i className="barra-celu-punto" aria-label={`${faltan} para reponer`} />}
+          </NavLink>
+        ))}
+        <button onClick={() => setAbierto(true)}>
+          <Menu size={21} strokeWidth={1.8} aria-hidden="true" />
+          <span>Más</span>
+        </button>
+      </nav>
+      {abierto && <button className="velo" aria-label="Cerrar el menú" onClick={() => setAbierto(false)} />}
       <DetalleReserva id={reserva} cerrar={() => setReserva(null)} />
     </div>
   )
@@ -75,28 +132,67 @@ export function Layout() {
 function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void }) {
   const e = useDatos()
   const r = e.reservas.find((x) => x.id === id)
+  const [pestana, setPestana] = useState<'turno' | 'consumos' | 'cobrar'>('turno')
+  // Al abrir: si se está jugando o ya cargaron algo, directo a los consumos
+  useEffect(() => {
+    if (!r) return
+    const ahora = ahoraMin()
+    const enJuego = r.dia === hoyClave() && r.inicio <= ahora && ahora < r.inicio + negocio.duracion + 30
+    setPestana(enJuego || e.cuentas.some((c) => c.reservaId === r.id && c.consumos.length) ? 'consumos' : 'turno')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
   if (!r) return <Dialogo abierto={false} cerrar={cerrar} titulo="">{null}</Dialogo>
   const cancha = negocio.canchas.find((c) => c.id === r.canchaId)!
   const fijo = e.fijos.find((f) => f.id === r.fijoId)
+  const rep = repartoCuenta(e, r.id)
   const msj = encodeURIComponent(`Hola ${r.titular.split(' ')[0]}! Te esperamos ${fechaCorta(r.dia)} a las ${hora(r.inicio)} en la ${cancha.nombre} de ${negocio.nombre}.`)
+  const falta = rep.total - rep.pagado
   return (
-    <Dialogo abierto cerrar={cerrar} titulo={`${cancha.nombre} · ${hora(r.inicio)}`} ancho={620}>
-      <dl className="ficha">
-        <div><dt>Titular</dt><dd>{r.titular}</dd></div>
-        <div><dt>WhatsApp</dt><dd>{r.telefono}</dd></div>
-        <div><dt>Día</dt><dd>{capital(fechaLarga(r.dia))}</dd></div>
-        <div><dt>Reservó por</dt><dd>{r.origen === 'fijo' ? `Turno fijo desde ${fechaCorta(fijo?.desde ?? r.dia)}` : r.origen === 'web' ? 'Web' : 'WhatsApp'}</dd></div>
-        <div><dt>Estado</dt><dd><span className={`estado estado-${r.estado}`}>{estados[r.estado]}</span></dd></div>
-        <div><dt>Precio</dt><dd>{pesos(r.precio)}</dd></div>
-        <div><dt>Seña</dt><dd>{r.seña ? pesos(r.seña) : '—'}</dd></div>
-        <div className="ficha-total"><dt>Saldo de la cancha</dt><dd>{r.estado === 'pagada' ? 'Pagado' : pesos(r.precio - r.seña)}</dd></div>
-      </dl>
-      {r.estado !== 'cancelada' && <CuentaCancha reservaId={r.id} />}
-      <div className="acciones-fila">
-        <a className="boton" href={`https://wa.me/54${r.telefono.replace(/\D/g, '')}?text=${msj}`} target="_blank" rel="noreferrer">Escribir por WhatsApp</a>
-        {r.estado === 'pendiente' && <button className="boton" onClick={() => actualizarReserva(r.id, { estado: 'señada', seña: negocio.seña })}>Marcar seña recibida</button>}
-        {r.estado !== 'cancelada' && r.estado !== 'pagada' && <button className="boton boton-peligro" onClick={() => { actualizarReserva(r.id, { estado: 'cancelada' }); cerrar() }}>Cancelar y liberar</button>}
+    <Dialogo abierto cerrar={cerrar} titulo={`${cancha.nombre} · ${hora(r.inicio)} a ${hora(r.inicio + negocio.duracion)}`} ancho={640}>
+      <div className="reserva-heroe">
+        <span>
+          <strong>{r.titular}</strong>
+          <small>{capital(fechaLarga(r.dia))}{r.origen === 'fijo' ? ' · turno fijo' : ''}</small>
+        </span>
+        <span className={`estado estado-${r.estado}`}>{estados[r.estado]}</span>
       </div>
+      {r.estado !== 'cancelada' && (
+        <div className="pestanas-reserva" role="tablist">
+          <button role="tab" aria-selected={pestana === 'turno'} className={pestana === 'turno' ? 'activa' : ''} onClick={() => setPestana('turno')}>Turno</button>
+          <button role="tab" aria-selected={pestana === 'consumos'} className={pestana === 'consumos' ? 'activa' : ''} onClick={() => setPestana('consumos')}>
+            Consumos {rep.cuenta.consumos.length > 0 && <span className="insignia">{rep.cuenta.consumos.length}</span>}
+          </button>
+          <button role="tab" aria-selected={pestana === 'cobrar'} className={pestana === 'cobrar' ? 'activa' : ''} onClick={() => setPestana('cobrar')}>Cobrar</button>
+        </div>
+      )}
+
+      {(pestana === 'turno' || r.estado === 'cancelada') && (
+        <>
+          <dl className="ficha ficha-compacta">
+            <div><dt>WhatsApp</dt><dd>{r.telefono}</dd></div>
+            <div><dt>Reservó por</dt><dd>{r.origen === 'fijo' ? `Turno fijo desde el ${diaMes(fijo?.desde ?? r.dia)}` : r.origen === 'web' ? 'La web' : 'WhatsApp'}</dd></div>
+            <div><dt>Precio</dt><dd>{pesos(r.precio)}</dd></div>
+            <div><dt>Seña</dt><dd>{r.seña ? `${pesos(r.seña)} por Mercado Pago` : '—'}</dd></div>
+          </dl>
+          <div className="acciones-reserva">
+            <a className="boton boton-wsp" href={`https://wa.me/54${r.telefono.replace(/\D/g, '')}?text=${msj}`} target="_blank" rel="noreferrer">Escribir por WhatsApp</a>
+            {r.estado === 'pendiente' && <button className="boton" onClick={() => actualizarReserva(r.id, { estado: 'señada', seña: negocio.seña })}>Marcar seña recibida</button>}
+            {r.estado !== 'cancelada' && r.estado !== 'pagada' && <button className="boton boton-peligro" onClick={() => { actualizarReserva(r.id, { estado: 'cancelada' }); cerrar() }}>Cancelar y liberar</button>}
+          </div>
+        </>
+      )}
+      {pestana === 'consumos' && r.estado !== 'cancelada' && <CuentaConsumos reservaId={r.id} />}
+      {pestana === 'cobrar' && r.estado !== 'cancelada' && <CuentaCobro reservaId={r.id} />}
+
+      {r.estado !== 'cancelada' && pestana !== 'cobrar' && (
+        <div className="pie-cuenta">
+          <span>
+            <small>{falta > 0 ? 'Falta cobrar' : 'Está todo pago'}</small>
+            <strong>{pesos(Math.max(0, falta))}</strong>
+          </span>
+          {falta > 0 && <button className="boton boton-amarillo" onClick={() => setPestana('cobrar')}>Cobrar</button>}
+        </div>
+      )}
     </Dialogo>
   )
 }
@@ -285,15 +381,6 @@ export function Canchas() {
                 </li>
               ))}
             </ul>
-          </div>
-          <h2 className="rail-titulo">Cantina rápida</h2>
-          <div className="tarjeta cantina">
-            {negocio.cantina.filter((it) => ['agua', 'isotonica', 'cerveza', 'fernet', 'hamb-simple', 'pelotas', 'paleta'].includes(it.id)).map((it) => (
-              <button key={it.id} className="boton boton-chico" onClick={() => vender({ dia: hoy, hora: ahoraMin(), itemId: it.id, monto: it.precio, metodo: 'efectivo', cantidad: 1 })}>
-                {it.nombre} <span className="tenue">{pesos(it.precio)}</span>
-              </button>
-            ))}
-            <p className="ayuda">Cada toque suma una venta en efectivo y descuenta el stock. Para cargarlo a una cancha, tocá el turno.</p>
           </div>
           {e.solicitudes.length > 0 && (
             <>
