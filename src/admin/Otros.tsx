@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { negocio } from '../config/negocio'
-import { capital, deClave, diaMes, fechaCorta, fechaLarga, hora, hoyClave, pct, pesos, sumarDias } from '../lib/formato'
-import { aceptarSolicitud, darDeBajaFijo, metodos, ocupada, rechazarSolicitud, useDatos, vender, type Metodo } from '../lib/datos'
-import { usePanel } from './Panel'
+import { capital, deClave, diaMes, fechaCorta, hora, hoyClave, pct, pesos, sumarDias } from '../lib/formato'
+import { aceptarSolicitud, darDeBajaFijo, ocupada, rechazarSolicitud, useDatos } from '../lib/datos'
 
 const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
@@ -80,85 +79,6 @@ export function Fijos() {
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ——— Caja y cantina ———
-
-export function Caja() {
-  const e = useDatos()
-  const { verReserva } = usePanel()
-  const hoy = hoyClave()
-  const [dia, setDia] = useState(hoy)
-  const [metodo, setMetodo] = useState<Metodo>('mercadopago')
-
-  const lineas = useMemo(() => {
-    const deReservas = e.reservas
-      .filter((r) => r.dia === dia && r.estado !== 'cancelada' && (r.estado === 'pagada' || r.seña > 0))
-      .map((r) => ({
-        id: r.id, reserva: r.id, hora: r.inicio, concepto: `${negocio.canchas.find((c) => c.id === r.canchaId)!.nombre} · ${r.titular}`,
-        detalle: r.estado === 'pagada' ? 'Turno completo' : 'Seña', metodo: (r.metodo ?? 'mercadopago') as Metodo,
-        monto: r.estado === 'pagada' ? r.precio : r.seña,
-      }))
-    const deCantina = e.ventas.filter((v) => v.dia === dia).map((v) => ({
-      id: v.id, reserva: undefined as string | undefined, hora: v.hora, concepto: negocio.cantina.find((c) => c.id === v.itemId)?.nombre ?? v.itemId,
-      detalle: 'Cantina', metodo: v.metodo, monto: v.monto,
-    }))
-    return [...deReservas, ...deCantina].sort((a, b) => b.hora - a.hora)
-  }, [e, dia])
-
-  const total = lineas.reduce((s, l) => s + l.monto, 0)
-  const canchas = lineas.filter((l) => l.reserva).reduce((s, l) => s + l.monto, 0)
-
-  return (
-    <div className="pantalla">
-      <div className="titulo-fila">
-        <div>
-          <h1>Caja y cantina</h1>
-          <p>{capital(fechaLarga(dia))}</p>
-        </div>
-        <div className="segmentos">
-          <button onClick={() => setDia(sumarDias(dia, -1))} aria-label="Día anterior">←</button>
-          <button className={dia === hoy ? 'activa' : ''} onClick={() => setDia(hoy)}>Hoy</button>
-          <button onClick={() => setDia(sumarDias(dia, 1))} disabled={dia >= hoy} aria-label="Día siguiente">→</button>
-        </div>
-      </div>
-      <div className="kpis">
-        <div className="kpi kpi-principal"><span>Total del día</span><strong>{pesos(total)}</strong><small>{pesos(canchas)} en canchas · {pesos(total - canchas)} en cantina</small></div>
-        {(Object.keys(metodos) as Metodo[]).map((m) => (
-          <div className="kpi" key={m}><span>{metodos[m]}</span><strong>{pesos(lineas.filter((l) => l.metodo === m).reduce((s, l) => s + l.monto, 0))}</strong><small>{lineas.filter((l) => l.metodo === m).length} movimientos</small></div>
-        ))}
-      </div>
-      <section className="tarjeta">
-        <div className="tarjeta-cabeza">
-          <h2>Vender en la cantina</h2>
-          <div className="segmentos">
-            {(Object.keys(metodos) as Metodo[]).map((m) => <button key={m} className={metodo === m ? 'activa' : ''} onClick={() => setMetodo(m)}>{metodos[m]}</button>)}
-          </div>
-        </div>
-        <div className="cantina">
-          {negocio.cantina.map((it) => (
-            <button key={it.id} className="boton" disabled={dia !== hoy} onClick={() => vender({ dia, hora: new Date().getHours() * 60 + new Date().getMinutes(), itemId: it.id, monto: it.precio, metodo })}>
-              {it.nombre} <span className="tenue">{pesos(it.precio)}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-      <table className="tabla">
-        <thead><tr><th className="num">Hora</th><th>Concepto</th><th>Medio</th><th className="num">Monto</th></tr></thead>
-        <tbody>
-          {lineas.map((l) => (
-            <tr key={l.id} className={l.reserva ? 'fila-clic' : ''} onClick={() => l.reserva && verReserva(l.reserva)}>
-              <td className="num">{hora(l.hora)}</td>
-              <td><strong>{l.concepto}</strong><small>{l.detalle}</small></td>
-              <td>{metodos[l.metodo]}</td>
-              <td className="num">{pesos(l.monto)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot><tr><td /><td>Total</td><td /><td className="num">{pesos(total)}</td></tr></tfoot>
       </table>
     </div>
   )

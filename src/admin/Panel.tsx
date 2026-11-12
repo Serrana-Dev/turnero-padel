@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useOutletContext, useSearchParams } from 'react-router-dom'
-import { BarChart3, CalendarRange, Globe, Menu, Repeat, RotateCcw, Trophy, Wallet } from 'lucide-react'
+import { BarChart3, CalendarRange, Globe, Menu, Package, Receipt, Repeat, RotateCcw, Trophy, Wallet } from 'lucide-react'
 import { negocio } from '../config/negocio'
 import { ahoraMin, capital, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
-import { actualizarReserva, estados, metodos, reiniciar, useDatos, vender, type Metodo, type Reserva } from '../lib/datos'
+import { actualizarReserva, estados, reiniciar, repartoCuenta, useDatos, vender, type Reserva } from '../lib/datos'
+import { CuentaCancha } from './Cuenta'
+import { bajoMinimo } from './Inventario'
 import { Dialogo } from '../lib/ui'
 import { CanchaDibujo } from '../lib/cancha'
 
@@ -14,7 +16,8 @@ const menu = [
   { a: '/admin', texto: 'Canchas del día', icono: CalendarRange, fin: true },
   { a: '/admin/torneos', texto: 'Torneos y ligas', icono: Trophy },
   { a: '/admin/fijos', texto: 'Turnos fijos', icono: Repeat },
-  { a: '/admin/caja', texto: 'Caja y cantina', icono: Wallet },
+  { a: '/admin/caja', texto: 'Caja', icono: Wallet },
+  { a: '/admin/stock', texto: 'Cantina y stock', icono: Package },
   { a: '/admin/reportes', texto: 'Reportes', icono: BarChart3 },
 ]
 
@@ -46,6 +49,7 @@ export function Layout() {
               <I size={17} strokeWidth={1.8} aria-hidden="true" />
               {texto}
               {a === '/admin/fijos' && e.solicitudes.length > 0 && <span className="insignia">{e.solicitudes.length}</span>}
+              {a === '/admin/stock' && bajoMinimo(e.stock).length > 0 && <span className="insignia">{bajoMinimo(e.stock).length}</span>}
             </NavLink>
           ))}
         </nav>
@@ -71,13 +75,12 @@ export function Layout() {
 function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void }) {
   const e = useDatos()
   const r = e.reservas.find((x) => x.id === id)
-  const [metodo, setMetodo] = useState<Metodo>('efectivo')
   if (!r) return <Dialogo abierto={false} cerrar={cerrar} titulo="">{null}</Dialogo>
   const cancha = negocio.canchas.find((c) => c.id === r.canchaId)!
   const fijo = e.fijos.find((f) => f.id === r.fijoId)
   const msj = encodeURIComponent(`Hola ${r.titular.split(' ')[0]}! Te esperamos ${fechaCorta(r.dia)} a las ${hora(r.inicio)} en la ${cancha.nombre} de ${negocio.nombre}.`)
   return (
-    <Dialogo abierto cerrar={cerrar} titulo={`${cancha.nombre} · ${hora(r.inicio)}`}>
+    <Dialogo abierto cerrar={cerrar} titulo={`${cancha.nombre} · ${hora(r.inicio)}`} ancho={620}>
       <dl className="ficha">
         <div><dt>Titular</dt><dd>{r.titular}</dd></div>
         <div><dt>WhatsApp</dt><dd>{r.telefono}</dd></div>
@@ -86,21 +89,9 @@ function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void 
         <div><dt>Estado</dt><dd><span className={`estado estado-${r.estado}`}>{estados[r.estado]}</span></dd></div>
         <div><dt>Precio</dt><dd>{pesos(r.precio)}</dd></div>
         <div><dt>Seña</dt><dd>{r.seña ? pesos(r.seña) : '—'}</dd></div>
-        <div className="ficha-total"><dt>Saldo</dt><dd>{r.estado === 'pagada' ? 'Pagado' : pesos(r.precio - r.seña)}</dd></div>
+        <div className="ficha-total"><dt>Saldo de la cancha</dt><dd>{r.estado === 'pagada' ? 'Pagado' : pesos(r.precio - r.seña)}</dd></div>
       </dl>
-      {(r.estado === 'señada' || r.estado === 'pendiente') && (
-        <div className="cobro">
-          <label className="campo">
-            Cobrar saldo con
-            <select value={metodo} onChange={(ev) => setMetodo(ev.target.value as Metodo)}>
-              {Object.entries(metodos).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </label>
-          <button className="boton boton-primario" onClick={() => { actualizarReserva(r.id, { estado: 'pagada', metodo }); cerrar() }}>
-            Cobrar {pesos(r.precio - r.seña)}
-          </button>
-        </div>
-      )}
+      {r.estado !== 'cancelada' && <CuentaCancha reservaId={r.id} />}
       <div className="acciones-fila">
         <a className="boton" href={`https://wa.me/54${r.telefono.replace(/\D/g, '')}?text=${msj}`} target="_blank" rel="noreferrer">Escribir por WhatsApp</a>
         {r.estado === 'pendiente' && <button className="boton" onClick={() => actualizarReserva(r.id, { estado: 'señada', seña: negocio.seña })}>Marcar seña recibida</button>}
@@ -136,6 +127,9 @@ function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
                     <span>{actual ? actual.titular : 'Libre'}</span>
                   </span>
                 </CanchaDibujo>
+                {actual && repartoCuenta(e, actual.id).consumos > 0 && (
+                  <span className="ahora-cuenta"><Receipt size={13} aria-hidden="true" /> {pesos(repartoCuenta(e, actual.id).consumos)} en la cantina</span>
+                )}
                 <span className="ahora-pie">
                   {actual
                     ? `Termina ${hora(actual.inicio + negocio.duracion)}, faltan ${resto} min`
@@ -294,12 +288,12 @@ export function Canchas() {
           </div>
           <h2 className="rail-titulo">Cantina rápida</h2>
           <div className="tarjeta cantina">
-            {negocio.cantina.map((it) => (
-              <button key={it.id} className="boton boton-chico" onClick={() => vender({ dia: hoy, hora: ahoraMin(), itemId: it.id, monto: it.precio, metodo: 'efectivo' })}>
+            {negocio.cantina.filter((it) => ['agua', 'isotonica', 'cerveza', 'fernet', 'hamb-simple', 'pelotas', 'paleta'].includes(it.id)).map((it) => (
+              <button key={it.id} className="boton boton-chico" onClick={() => vender({ dia: hoy, hora: ahoraMin(), itemId: it.id, monto: it.precio, metodo: 'efectivo', cantidad: 1 })}>
                 {it.nombre} <span className="tenue">{pesos(it.precio)}</span>
               </button>
             ))}
-            <p className="ayuda">Cada toque suma una venta en efectivo a la caja de hoy.</p>
+            <p className="ayuda">Cada toque suma una venta en efectivo y descuenta el stock. Para cargarlo a una cancha, tocá el turno.</p>
           </div>
           {e.solicitudes.length > 0 && (
             <>

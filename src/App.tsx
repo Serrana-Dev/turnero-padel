@@ -1,7 +1,9 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Sitio, { CompetenciaPublica } from './sitio/Sitio'
 import { Canchas, Layout } from './admin/Panel'
-import { Caja, Fijos, Reportes } from './admin/Otros'
+import { Fijos, Reportes } from './admin/Otros'
+import { Caja } from './admin/Caja'
+import { Inventario } from './admin/Inventario'
 import { CompetenciaAdmin, Competencias } from './admin/Competencias'
 import './sitio/sitio.css'
 import './admin/admin.css'
@@ -20,6 +22,7 @@ export default function App() {
           <Route path="torneos/:id" element={<CompetenciaAdmin />} />
           <Route path="fijos" element={<Fijos />} />
           <Route path="caja" element={<Caja />} />
+          <Route path="stock" element={<Inventario />} />
           <Route path="reportes" element={<Reportes />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
