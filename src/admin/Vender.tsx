@@ -4,7 +4,7 @@ import { Check, ChevronUp, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react
 import { negocio, type Categoria } from '../config/negocio'
 import { agregarConsumo, costeo, cuentaDe, metodos, useDatos, venderTicket, type Metodo } from '../lib/datos'
 import { ahoraMin, hora, hoyClave, pesos } from '../lib/formato'
-import { bajoMinimo, Buscador, Cabecera, categorias, Chips, coincide, colorDe, IconoProducto, tintaSobre } from './comun'
+import { bajoMinimo, Buscador, Cabecera, categorias, Chips, coincide, colorDe, IconoProducto, tintaSobre, Vuelto } from './comun'
 import { resumenReceta } from './Productos'
 
 type Linea = { itemId: string; cantidad: number }
@@ -22,19 +22,23 @@ export function Vender() {
   const [quien, setQuien] = useState<string>('')
   const [hecho, setHecho] = useState<string | null>(null)
   const [abierto, setAbierto] = useState(false)
+  const [paga, setPaga] = useState<number | null>(null)
+  /** Descuento en %; 100 = invita la casa. */
+  const [desc, setDesc] = useState(0)
 
   const ventasHoy = e.ventas.filter((v) => v.dia === hoy)
   const totalHoy = ventasHoy.reduce((s, v) => s + v.monto, 0)
   const lista = e.productos.filter((p) => !p.pausado && (cat === 'todos' || p.categoria === cat) && (!q || coincide(p.nombre, q) || coincide(resumenReceta(e, p.id), q)))
-  const total = ticket.reduce((s, l) => s + (e.productos.find((p) => p.id === l.itemId)?.precio ?? 0) * l.cantidad, 0)
+  const lista0 = ticket.reduce((s, l) => s + (e.productos.find((p) => p.id === l.itemId)?.precio ?? 0) * l.cantidad, 0)
+  const total = desc === 100 ? 0 : Math.round((lista0 * (1 - desc / 100)) / 100) * 100
   const unidades = ticket.reduce((s, l) => s + l.cantidad, 0)
 
   // Las canchas que se pueden cargar: las que se están jugando y las que están por empezar o recién terminaron
   const canchas = useMemo(
     () =>
       e.reservas
-        .filter((r) => r.dia === hoy && r.estado !== 'cancelada' && !(r.estado === 'pagada' && !r.porCuenta) && r.inicio - 60 <= ahora && r.inicio + negocio.duracion + 60 >= ahora)
-        .sort((a, b) => a.inicio - b.inicio),
+        .filter((r) => r.dia === hoy && r.estado !== 'cancelada' && r.estado !== 'pagada')
+        .sort((a, b) => Math.abs(a.inicio + 45 - ahora) - Math.abs(b.inicio + 45 - ahora)),
     [e.reservas, hoy, ahora],
   )
   const reservaElegida = canchas.find((r) => r.id === reservaId) ?? canchas[0]
@@ -42,6 +46,7 @@ export function Vender() {
 
   const sumar = (itemId: string, n = 1) => {
     setHecho(null)
+    setPaga(null)
     setTicket((t) => {
       const ya = t.find((l) => l.itemId === itemId)
       if (!ya) return n > 0 ? [...t, { itemId, cantidad: n }] : t
@@ -51,14 +56,17 @@ export function Vender() {
   const cobrar = () => {
     if (!ticket.length) return
     if (destino === 'cobrar') {
-      venderTicket(ticket, metodo)
-      setHecho(`Cobrado ${pesos(total)} en ${metodos[metodo].toLowerCase()}. El stock ya se descontó.`)
+      venderTicket(ticket, metodo, desc === 100 ? 0 : desc, desc === 100)
+      const vuelto = metodo === 'efectivo' && paga !== null && paga > total ? ` Vuelto: ${pesos(paga - total)}.` : ''
+      setHecho(desc === 100 ? 'Invita la casa: no se cobró y el stock ya se descontó.' : `Cobrado ${pesos(total)} en ${metodos[metodo].toLowerCase()}${desc ? ` con ${desc} % de descuento` : ''}.${vuelto} El stock ya se descontó.`)
     } else if (reservaElegida) {
       ticket.forEach((l) => { for (let i = 0; i < l.cantidad; i++) agregarConsumo(reservaElegida.id, l.itemId, quien || null) })
       const c = negocio.canchas.find((x) => x.id === reservaElegida.canchaId)!.nombre
-      setHecho(`Cargado ${pesos(total)} a la ${c}${quien ? `, a nombre de ${quien}` : ''}. Se cobra al final del turno.`)
+      setHecho(`Cargado ${pesos(lista0)} a la ${c}${quien ? `, a nombre de ${quien}` : ''}. Se cobra al final del turno.`)
     }
     setTicket([])
+    setPaga(null)
+    setDesc(0)
     setAbierto(false)
   }
 
@@ -120,14 +128,28 @@ export function Vender() {
               </ul>
             )}
 
+            {ticket.length > 0 && destino === 'cobrar' && (
+              <div className="ticket-desc">
+                <span>Descuento</span>
+                <div className="chips-filtro" role="group" aria-label="Descuento">
+                  {[[0, 'No'], [10, '10 %'], [20, '20 %'], [100, 'Invita la casa']].map(([v, t]) => (
+                    <button key={v} className={desc === v ? 'activa' : ''} onClick={() => { setDesc(v as number); setPaga(null) }}>{t}</button>
+                  ))}
+                </div>
+                {desc > 0 && <p className="ticket-ahorro">{desc === 100 ? `Se regala ${pesos(lista0)}: sale del stock, no entra plata.` : `Antes ${pesos(lista0)}, ahora ${pesos(total)}.`}</p>}
+              </div>
+            )}
             <div className="ticket-destino segmentos segmentos-ancho">
               <button className={destino === 'cobrar' ? 'activa' : ''} onClick={() => setDestino('cobrar')}>Cobrar ahora</button>
-              <button className={destino === 'cancha' ? 'activa' : ''} onClick={() => setDestino('cancha')} disabled={!canchas.length}>A la cuenta de una cancha</button>
+              <button className={destino === 'cancha' ? 'activa' : ''} onClick={() => { setDestino('cancha'); setDesc(0) }} disabled={!canchas.length}>A la cuenta de una cancha</button>
             </div>
             {destino === 'cobrar' ? (
-              <div className="chips-filtro chips-metodo" role="group" aria-label="Medio de pago">
-                {(Object.keys(metodos) as Metodo[]).map((m) => <button key={m} className={metodo === m ? 'activa' : ''} onClick={() => setMetodo(m)}>{metodos[m]}</button>)}
-              </div>
+              <>
+                <div className="chips-filtro chips-metodo" role="group" aria-label="Medio de pago">
+                  {(Object.keys(metodos) as Metodo[]).map((m) => <button key={m} className={metodo === m ? 'activa' : ''} onClick={() => setMetodo(m)}>{metodos[m]}</button>)}
+                </div>
+                {metodo === 'efectivo' && total > 0 && desc !== 100 && <Vuelto total={total} paga={paga} cambiar={setPaga} oscuro />}
+              </>
             ) : (
               <div className="ticket-cancha">
                 <select className="select-chico" value={reservaElegida?.id ?? ''} onChange={(ev) => { setReservaId(ev.target.value); setQuien('') }} aria-label="Cancha">
@@ -139,8 +161,8 @@ export function Vender() {
                 </div>
               </div>
             )}
-            <button className="boton boton-amarillo boton-ancho boton-cobrar" disabled={!ticket.length} onClick={cobrar}>
-              {destino === 'cobrar' ? `Cobrar ${pesos(total)}` : `Cargar ${pesos(total)} a la cancha`}
+            <button className="boton boton-amarillo boton-ancho boton-cobrar" disabled={!ticket.length || (destino === 'cobrar' && metodo === 'efectivo' && paga !== null && paga < total)} onClick={cobrar}>
+              {destino === 'cobrar' ? (desc === 100 ? 'Invitar' : `Cobrar ${pesos(total)}`) : `Cargar ${pesos(lista0)} a la cancha`}
             </button>
           </div>
         </aside>

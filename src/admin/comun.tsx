@@ -173,3 +173,42 @@ export function Menos({ n }: { n: number }) {
   const v = Math.abs(n) < 0.5 ? 0 : Math.abs(n)
   return <>{v ? `−${pesos(v)}` : pesos(0)}</>
 }
+
+/** Los billetes con los que suele pagar alguien un total: justo, redondeado y los billetes grandes. */
+export function opcionesPago(total: number) {
+  const arriba = (n: number, paso: number) => Math.ceil(n / paso) * paso
+  const lista = [total, arriba(total, 1000), arriba(total, 5000), arriba(total, 10000), arriba(total, 20000), 50000].filter((x) => x >= total)
+  return [...new Set(lista)].slice(0, 4)
+}
+
+/** Calculadora de vuelto: con cuánto paga y cuánto hay que devolver. */
+export function Vuelto({ total, paga, cambiar, oscuro = false }: { total: number; paga: number | null; cambiar: (n: number | null) => void; oscuro?: boolean }) {
+  const vuelto = paga === null ? null : paga - total
+  const opciones = opcionesPago(total)
+  return (
+    <div className={`vuelto ${oscuro ? 'vuelto-oscuro' : ''}`}>
+      <span className="vuelto-titulo">Paga con</span>
+      <div className="vuelto-opciones">
+        {opciones.map((n) => (
+          <button key={n} type="button" className={paga === n ? 'activa' : ''} onClick={() => cambiar(paga === n ? null : n)}>
+            {n === total ? 'Justo' : pesos(n)}
+          </button>
+        ))}
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          placeholder="Otro"
+          aria-label="Con cuánto paga"
+          value={paga !== null && !opciones.includes(paga) ? paga : ''}
+          onChange={(ev) => cambiar(ev.target.value === '' ? null : Number(ev.target.value))}
+        />
+      </div>
+      {vuelto !== null && (
+        <p className={`vuelto-resultado ${vuelto < 0 ? 'vuelto-falta' : ''}`}>
+          {vuelto < 0 ? <>Faltan <strong>{pesos(-vuelto)}</strong></> : vuelto === 0 ? <>Justo <strong>sin vuelto</strong></> : <>Vuelto <strong>{pesos(vuelto)}</strong></>}
+        </p>
+      )}
+    </div>
+  )
+}

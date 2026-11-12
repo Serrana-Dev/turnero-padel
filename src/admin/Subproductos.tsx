@@ -2,13 +2,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ClipboardList, History, Pencil, Plus, Send } from 'lucide-react'
-import { negocio, type Insumo, type Rubro } from '../config/negocio'
-import { ajustarStock, cargarCompra, guardarInsumo, insumoDe, useDatos, type Estado } from '../lib/datos'
-import { capital, fechaCorta, hora, hoyClave, pesos } from '../lib/formato'
+import { negocio, rubros, type Categoria, type Insumo, type Rubro } from '../config/negocio'
+import { ajustarStock, cargarCompra, guardarInsumo, guardarProducto, insumoDe, registrarMerma, useDatos, type Estado } from '../lib/datos'
+import { capital, fechaCorta, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
-import { bajoMinimo, Buscador, Cabecera, cantidad, Chips, coincide, costoMostrado, precioUnidad, unidadLarga } from './comun'
+import { bajoMinimo, Buscador, Cabecera, cantidad, categorias, Chips, coincide, costoMostrado, precioUnidad, unidadLarga } from './comun'
 
 type Filtro = 'todos' | Rubro | 'reponer'
+
+/** El producto que vende un subproducto tal cual (una lata, un tubo de pelotas): receta de 1 unidad de él. */
+export function seVendeTalCual(e: Estado, insumoId: string) {
+  return e.productos.find((p) => p.receta.length === 1 && p.receta[0].insumoId === insumoId && p.receta[0].cantidad === 1)
+}
 
 /** Qué productos usan un subproducto (también dentro de combos). */
 export function quienesLoUsan(e: Estado, insumoId: string) {
@@ -24,14 +29,17 @@ export function Subproductos() {
   const [contar, setContar] = useState<string | null>(null)
   const [editar, setEditar] = useState<Insumo | null>(null)
   const [pedido, setPedido] = useState(false)
+  const [merma, setMerma] = useState<string | null>(null)
   const faltan = bajoMinimo(e)
   const valor = e.insumos.reduce((s, x) => s + Math.max(0, e.stock[x.id] ?? 0) * x.costo, 0)
+  const desdeMes = sumarDias(hoyClave(), -29)
+  const perdido = e.movimientos.filter((m) => m.motivo === 'merma' && m.dia >= desdeMes).reduce((s, m) => s + Math.abs(m.cantidad) * (insumoDe(e, m.insumoId)?.costo ?? 0), 0)
 
   // Desde el armador de recetas se puede venir a crear un subproducto que no existe
   useEffect(() => {
     const n = sp.get('nuevo')
     if (n !== null) {
-      setEditar({ id: '', nombre: n, unidad: 'u', costo: 0, minimo: 0, rubro: 'Cocina', proveedor: negocio.proveedores[0].nombre })
+      setEditar({ id: '', nombre: n, unidad: 'u', costo: 0, minimo: 0, rubro: 'Almacén y verdura', proveedor: negocio.proveedores[0].nombre })
       setSp({}, { replace: true })
     }
   }, [sp, setSp])
@@ -50,10 +58,11 @@ export function Subproductos() {
           <>
             Lo que se compra y se descuenta solo con cada venta. Hay <strong>{pesos(valor)}</strong> en mercadería
             {faltan.length ? <> y <strong>{faltan.length} para reponer</strong>.</> : ', nada para reponer.'}
+            {perdido > 0 && <> En mermas se perdieron {pesos(perdido)} este mes.</>}
           </>
         }
       >
-        <button className="boton" onClick={() => setEditar({ id: '', nombre: '', unidad: 'u', costo: 0, minimo: 0, rubro: 'Cocina', proveedor: negocio.proveedores[0].nombre })}>
+        <button className="boton" onClick={() => setEditar({ id: '', nombre: '', unidad: 'u', costo: 0, minimo: 0, rubro: 'Almacén y verdura', proveedor: negocio.proveedores[0].nombre })}>
           <Plus size={16} aria-hidden="true" /> Nuevo subproducto
         </button>
       </Cabecera>
@@ -80,10 +89,10 @@ export function Subproductos() {
       {vista === 'stock' ? (
         <>
           <Chips<Filtro>
-            opciones={[['todos', 'Todos'], ['Cocina', 'Cocina'], ['Bebidas', 'Bebidas'], ['Deportes', 'Deportes'], ['reponer', 'Para reponer']]}
+            opciones={[['todos', 'Todos'], ['reponer', 'Para reponer'], ...rubros.map((r) => [r, r] as [Rubro, string])]}
             valor={filtro}
             cambiar={setFiltro}
-            cuentas={{ todos: e.insumos.length, reponer: faltan.length, Cocina: e.insumos.filter((x) => x.rubro === 'Cocina').length, Bebidas: e.insumos.filter((x) => x.rubro === 'Bebidas').length, Deportes: e.insumos.filter((x) => x.rubro === 'Deportes').length }}
+            cuentas={{ todos: e.insumos.length, reponer: faltan.length, ...Object.fromEntries(rubros.map((r) => [r, e.insumos.filter((x) => x.rubro === r).length])) }}
           />
           {lista.length === 0 ? (
             <p className="vacio-grande">No hay subproductos que coincidan.</p>
@@ -99,6 +108,7 @@ export function Subproductos() {
                     <div className="sub-nombre">
                       <strong>{x.nombre}</strong>
                       <small>{x.rubro} · {x.proveedor}{x.merma ? ` · merma ${Math.round(x.merma * 100)} %` : ''}</small>
+                      {seVendeTalCual(e, x.id) && <span className="tal-cual">Se vende tal cual</span>}
                     </div>
                     <div className="sub-nivel">
                       <span className={`nivel-barra nivel-${estado}`}><i style={{ width: `${nivel * 100}%` }} /></span>
@@ -120,6 +130,7 @@ export function Subproductos() {
                     </div>
                     <div className="sub-acciones">
                       <button className="boton boton-chico" onClick={() => setContar(x.id)}>Contar</button>
+                      <button className="boton boton-chico" onClick={() => setMerma(x.id)}>Merma</button>
                       <button className="btn-icono" aria-label={`Editar ${x.nombre}`} onClick={() => setEditar(x)}><Pencil size={16} /></button>
                     </div>
                   </li>
@@ -135,6 +146,7 @@ export function Subproductos() {
       {contar && <DialogoContar id={contar} cerrar={() => setContar(null)} />}
       {editar && <DialogoSubproducto inicial={editar} cerrar={() => setEditar(null)} />}
       {pedido && <DialogoPedido cerrar={() => setPedido(false)} />}
+      {merma && <DialogoMerma id={merma} cerrar={() => setMerma(null)} />}
     </div>
   )
 }
@@ -152,7 +164,7 @@ function Movimientos({ q }: { q: string }) {
         if (!ins) return null
         return (
           <li key={m.id}>
-            <span className={`mov-tipo mov-tipo-${m.motivo}`}>{m.motivo === 'compra' ? 'Compra' : m.motivo === 'venta' ? 'Venta' : 'Ajuste'}</span>
+            <span className={`mov-tipo mov-tipo-${m.motivo}`}>{m.motivo === 'compra' ? 'Compra' : m.motivo === 'venta' ? 'Venta' : m.motivo === 'merma' ? 'Merma' : 'Ajuste'}</span>
             <span className="movs-stock-texto">
               <strong>{ins.nombre}</strong>
               <small>{m.dia === hoyClave() ? 'Hoy' : capital(fechaCorta(m.dia))} {hora(m.hora)} · {m.detalle}</small>
@@ -205,6 +217,10 @@ function DialogoSubproducto({ inicial, cerrar }: { inicial: Insumo; cerrar: () =
   const [x, setX] = useState<Insumo>(inicial)
   // El costo se carga como se compra: por unidad, por kilo o por litro
   const [costo, setCosto] = useState(String(costoMostrado(inicial) || ''))
+  // Bebidas, pelotas, grips: se compran y se venden igual, así que se crea el producto de una
+  const [talCual, setTalCual] = useState(false)
+  const [precio, setPrecio] = useState('')
+  const [cat, setCat] = useState<Categoria>('Bebidas')
   const set = (c: Partial<Insumo>) => setX({ ...x, ...c })
   return (
     <Dialogo abierto cerrar={cerrar} titulo={nuevo ? 'Nuevo subproducto' : `Editar ${inicial.nombre.toLowerCase()}`} ancho={560}>
@@ -213,7 +229,10 @@ function DialogoSubproducto({ inicial, cerrar }: { inicial: Insumo; cerrar: () =
         onSubmit={(ev) => {
           ev.preventDefault()
           const c = Number(costo) || 0
-          guardarInsumo({ ...x, id: x.id || `i${Date.now()}`, nombre: x.nombre.trim(), costo: x.unidad === 'u' ? c : c / 1000 })
+          const id = x.id || `i${Date.now()}`
+          guardarInsumo({ ...x, id, nombre: x.nombre.trim(), costo: x.unidad === 'u' ? c : c / 1000 })
+          if (nuevo && talCual && Number(precio) > 0)
+            guardarProducto({ id: `p${Date.now()}`, nombre: x.nombre.trim(), precio: Number(precio), categoria: cat, receta: [{ insumoId: id, cantidad: 1 }], icono: cat === 'Bebidas' ? 'gaseosa' : cat === 'Deportes' ? 'pelota' : 'combo' })
           cerrar()
         }}
       >
@@ -243,7 +262,7 @@ function DialogoSubproducto({ inicial, cerrar }: { inicial: Insumo; cerrar: () =
           <label className="campo">
             Rubro
             <select value={x.rubro} onChange={(ev) => set({ rubro: ev.target.value as Rubro })}>
-              <option>Cocina</option><option>Bebidas</option><option>Deportes</option>
+              {rubros.map((r) => <option key={r}>{r}</option>)}
             </select>
           </label>
           <label className="campo">
@@ -256,6 +275,26 @@ function DialogoSubproducto({ inicial, cerrar }: { inicial: Insumo; cerrar: () =
           <input type="range" min={0} max={40} value={Math.round((x.merma ?? 0) * 100)} onChange={(ev) => set({ merma: Number(ev.target.value) / 100 })} />
         </label>
         <p className="ayuda">Ej.: del lomo se limpia la grasa y se pierde un 12 %. Con la merma, el costo de cada receta y lo que se descuenta del stock son los reales.</p>
+        {nuevo && x.unidad === 'u' && (
+          <div className="tal-cual-caja">
+            <label className="interruptor-linea">
+              <input type="checkbox" checked={talCual} onChange={(ev) => setTalCual(ev.target.checked)} />
+              Se vende tal cual (una lata, un tubo de pelotas): crear también el producto
+            </label>
+            {talCual && (
+              <div className="campos-2">
+                <label className="campo">
+                  Precio de venta
+                  <input type="number" inputMode="numeric" min={0} value={precio} onChange={(ev) => setPrecio(ev.target.value)} required />
+                </label>
+                <label className="campo">
+                  Se vende en
+                  <select value={cat} onChange={(ev) => setCat(ev.target.value as Categoria)}>{categorias.map((c) => <option key={c}>{c}</option>)}</select>
+                </label>
+              </div>
+            )}
+          </div>
+        )}
         <div className="acciones-fila">
           <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
           <button className="boton boton-primario" disabled={!x.nombre.trim()}>{nuevo ? 'Crear subproducto' : 'Guardar'}</button>
@@ -322,6 +361,36 @@ function DialogoPedido({ cerrar }: { cerrar: () => void }) {
         })}
       </div>
       <div className="acciones-fila"><button className="boton boton-primario" onClick={cerrar}>Listo</button></div>
+    </Dialogo>
+  )
+}
+
+/** Lo que se tira: se venció, se cayó, salió mal. Sale del stock y queda aparte, con su costo. */
+function DialogoMerma({ id, cerrar }: { id: string; cerrar: () => void }) {
+  const e = useDatos()
+  const ins = insumoDe(e, id)!
+  const [cant, setCant] = useState('')
+  const [motivo, setMotivo] = useState('Se venció')
+  const n = Number(cant) || 0
+  return (
+    <Dialogo abierto cerrar={cerrar} titulo={`Merma de ${ins.nombre.toLowerCase()}`}>
+      <form className="formulario" onSubmit={(ev) => { ev.preventDefault(); registrarMerma(id, n, motivo); cerrar() }}>
+        <div className="campo">
+          Qué pasó
+          <div className="chips-filtro">
+            {['Se venció', 'Se cayó o se rompió', 'Salió mal en la cocina', 'Otro'].map((m) => <button key={m} type="button" className={motivo === m ? 'activa' : ''} onClick={() => setMotivo(m)}>{m}</button>)}
+          </div>
+        </div>
+        <label className="campo">
+          Cuánto se tiró ({unidadLarga(ins.unidad)})
+          <input type="number" inputMode="decimal" min={0} autoFocus value={cant} onChange={(ev) => setCant(ev.target.value)} />
+        </label>
+        {n > 0 && <p className="arqueo arqueo-falta">Se pierden {pesos(n * ins.costo)} a costo. Quedan {cantidad((e.stock[id] ?? 0) - n, ins.unidad)}.</p>}
+        <div className="acciones-fila">
+          <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
+          <button className="boton boton-primario" disabled={!n}>Registrar merma</button>
+        </div>
+      </form>
     </Dialogo>
   )
 }

@@ -3,7 +3,9 @@
 
 export type Cancha = { id: string; nombre: string; detalle: string; techada: boolean }
 /** Lo que se compra y se guarda: pan, medallones, fernet, pelotas. Unidad: u (unidades), g o ml. */
-export type Rubro = 'Bebidas' | 'Cocina' | 'Deportes'
+/** El rubro del subproducto es independiente de la categoría con la que se vende el producto. */
+export type Rubro = 'Panadería' | 'Carnes y fiambres' | 'Almacén y verdura' | 'Bebidas y licores' | 'Pádel'
+export const rubros: Rubro[] = ['Panadería', 'Carnes y fiambres', 'Almacén y verdura', 'Bebidas y licores', 'Pádel']
 /** Lo que se compra y se guarda: pan, medallones, fernet, pelotas. Unidad: u (unidades), g o ml.
  *  merma: lo que se pierde al prepararlo (0,12 = 12 %), así el costo y el descuento de stock son reales. */
 export type Insumo = { id: string; nombre: string; unidad: 'u' | 'g' | 'ml'; costo: number; minimo: number; rubro: Rubro; proveedor: string; merma?: number }
@@ -41,27 +43,27 @@ export const negocio = {
 
   // Insumos de la cantina (costos de noviembre 2026, de muestra)
   insumos: [
-    { id: 'pan-hamb', nombre: 'Pan de hamburguesa', unidad: 'u', costo: 350, minimo: 24, rubro: 'Cocina', proveedor: 'Panadería La Espiga' },
-    { id: 'medallon', nombre: 'Medallón de carne', unidad: 'u', costo: 1100, minimo: 20, rubro: 'Cocina', proveedor: 'Frigorífico Don Pepe' },
-    { id: 'cheddar', nombre: 'Cheddar en fetas', unidad: 'u', costo: 180, minimo: 30, rubro: 'Cocina', proveedor: 'Mayorista Diarco' },
-    { id: 'panceta', nombre: 'Panceta', unidad: 'g', costo: 9, minimo: 500, rubro: 'Cocina', proveedor: 'Frigorífico Don Pepe', merma: 0.08 },
-    { id: 'huevo', nombre: 'Huevos', unidad: 'u', costo: 200, minimo: 24, rubro: 'Cocina', proveedor: 'Mayorista Diarco' },
-    { id: 'pan-lomo', nombre: 'Pan de lomito', unidad: 'u', costo: 450, minimo: 12, rubro: 'Cocina', proveedor: 'Panadería La Espiga' },
-    { id: 'lomo', nombre: 'Lomo', unidad: 'g', costo: 18, minimo: 2000, rubro: 'Cocina', proveedor: 'Frigorífico Don Pepe', merma: 0.12 },
-    { id: 'jamon', nombre: 'Jamón cocido', unidad: 'g', costo: 10, minimo: 600, rubro: 'Cocina', proveedor: 'Frigorífico Don Pepe' },
-    { id: 'queso', nombre: 'Queso de máquina', unidad: 'g', costo: 9, minimo: 600, rubro: 'Cocina', proveedor: 'Mayorista Diarco' },
-    { id: 'verdura', nombre: 'Lechuga y tomate', unidad: 'g', costo: 3, minimo: 800, rubro: 'Cocina', proveedor: 'Mayorista Diarco', merma: 0.2 },
-    { id: 'papas', nombre: 'Papas congeladas', unidad: 'g', costo: 4, minimo: 5000, rubro: 'Cocina', proveedor: 'Mayorista Diarco', merma: 0.05 },
-    { id: 'pan-miga', nombre: 'Pan de miga (plancha)', unidad: 'u', costo: 120, minimo: 24, rubro: 'Cocina', proveedor: 'Panadería La Espiga' },
-    { id: 'agua', nombre: 'Agua 500 ml', unidad: 'u', costo: 700, minimo: 48, rubro: 'Bebidas', proveedor: 'Distribuidora Cuyo Bebidas' },
-    { id: 'isotonica', nombre: 'Bebida isotónica', unidad: 'u', costo: 1400, minimo: 24, rubro: 'Bebidas', proveedor: 'Distribuidora Cuyo Bebidas' },
-    { id: 'cerveza', nombre: 'Cerveza lata 473', unidad: 'u', costo: 1800, minimo: 48, rubro: 'Bebidas', proveedor: 'Distribuidora Cuyo Bebidas' },
-    { id: 'gaseosa', nombre: 'Gaseosa lata', unidad: 'u', costo: 1000, minimo: 24, rubro: 'Bebidas', proveedor: 'Distribuidora Cuyo Bebidas' },
-    { id: 'fernet', nombre: 'Fernet', unidad: 'ml', costo: 14, minimo: 1500, rubro: 'Bebidas', proveedor: 'Distribuidora Cuyo Bebidas' },
-    { id: 'coca', nombre: 'Coca 2,25 L', unidad: 'ml', costo: 1.4, minimo: 4500, rubro: 'Bebidas', proveedor: 'Distribuidora Cuyo Bebidas' },
-    { id: 'hielo', nombre: 'Hielo', unidad: 'g', costo: 1, minimo: 5000, rubro: 'Bebidas', proveedor: 'Mayorista Diarco' },
-    { id: 'tubo', nombre: 'Tubo de pelotas', unidad: 'u', costo: 5200, minimo: 10, rubro: 'Deportes', proveedor: 'Padel Shop Córdoba' },
-    { id: 'grip', nombre: 'Grip / overgrip', unidad: 'u', costo: 1500, minimo: 6, rubro: 'Deportes', proveedor: 'Padel Shop Córdoba' },
+    { id: 'pan-hamb', nombre: 'Pan de hamburguesa', unidad: 'u', costo: 350, minimo: 24, rubro: 'Panadería', proveedor: 'Panadería La Espiga' },
+    { id: 'medallon', nombre: 'Medallón de carne', unidad: 'u', costo: 1100, minimo: 20, rubro: 'Carnes y fiambres', proveedor: 'Frigorífico Don Pepe' },
+    { id: 'cheddar', nombre: 'Cheddar en fetas', unidad: 'u', costo: 180, minimo: 30, rubro: 'Almacén y verdura', proveedor: 'Mayorista Diarco' },
+    { id: 'panceta', nombre: 'Panceta', unidad: 'g', costo: 9, minimo: 500, rubro: 'Carnes y fiambres', proveedor: 'Frigorífico Don Pepe', merma: 0.08 },
+    { id: 'huevo', nombre: 'Huevos', unidad: 'u', costo: 200, minimo: 24, rubro: 'Almacén y verdura', proveedor: 'Mayorista Diarco' },
+    { id: 'pan-lomo', nombre: 'Pan de lomito', unidad: 'u', costo: 450, minimo: 12, rubro: 'Panadería', proveedor: 'Panadería La Espiga' },
+    { id: 'lomo', nombre: 'Lomo', unidad: 'g', costo: 18, minimo: 2000, rubro: 'Carnes y fiambres', proveedor: 'Frigorífico Don Pepe', merma: 0.12 },
+    { id: 'jamon', nombre: 'Jamón cocido', unidad: 'g', costo: 10, minimo: 600, rubro: 'Carnes y fiambres', proveedor: 'Frigorífico Don Pepe' },
+    { id: 'queso', nombre: 'Queso de máquina', unidad: 'g', costo: 9, minimo: 600, rubro: 'Almacén y verdura', proveedor: 'Mayorista Diarco' },
+    { id: 'verdura', nombre: 'Lechuga y tomate', unidad: 'g', costo: 3, minimo: 800, rubro: 'Almacén y verdura', proveedor: 'Mayorista Diarco', merma: 0.2 },
+    { id: 'papas', nombre: 'Papas congeladas', unidad: 'g', costo: 4, minimo: 5000, rubro: 'Almacén y verdura', proveedor: 'Mayorista Diarco', merma: 0.05 },
+    { id: 'pan-miga', nombre: 'Pan de miga (plancha)', unidad: 'u', costo: 120, minimo: 24, rubro: 'Panadería', proveedor: 'Panadería La Espiga' },
+    { id: 'agua', nombre: 'Agua 500 ml', unidad: 'u', costo: 700, minimo: 48, rubro: 'Bebidas y licores', proveedor: 'Distribuidora Cuyo Bebidas' },
+    { id: 'isotonica', nombre: 'Bebida isotónica', unidad: 'u', costo: 1400, minimo: 24, rubro: 'Bebidas y licores', proveedor: 'Distribuidora Cuyo Bebidas' },
+    { id: 'cerveza', nombre: 'Cerveza lata 473', unidad: 'u', costo: 1800, minimo: 48, rubro: 'Bebidas y licores', proveedor: 'Distribuidora Cuyo Bebidas' },
+    { id: 'gaseosa', nombre: 'Gaseosa lata', unidad: 'u', costo: 1000, minimo: 24, rubro: 'Bebidas y licores', proveedor: 'Distribuidora Cuyo Bebidas' },
+    { id: 'fernet', nombre: 'Fernet', unidad: 'ml', costo: 14, minimo: 1500, rubro: 'Bebidas y licores', proveedor: 'Distribuidora Cuyo Bebidas' },
+    { id: 'coca', nombre: 'Coca 2,25 L', unidad: 'ml', costo: 1.4, minimo: 4500, rubro: 'Bebidas y licores', proveedor: 'Distribuidora Cuyo Bebidas' },
+    { id: 'hielo', nombre: 'Hielo', unidad: 'g', costo: 1, minimo: 5000, rubro: 'Almacén y verdura', proveedor: 'Mayorista Diarco' },
+    { id: 'tubo', nombre: 'Tubo de pelotas', unidad: 'u', costo: 5200, minimo: 10, rubro: 'Pádel', proveedor: 'Padel Shop Córdoba' },
+    { id: 'grip', nombre: 'Grip / overgrip', unidad: 'u', costo: 1500, minimo: 6, rubro: 'Pádel', proveedor: 'Padel Shop Córdoba' },
   ] as Insumo[],
 
   // Lo que se vende, con su receta: al venderlo se descuenta solo cada insumo.

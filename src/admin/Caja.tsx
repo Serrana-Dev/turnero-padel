@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Lock, LockOpen, Minus, Plus, Receipt, ShoppingBag } from 'lucide-react'
 import { negocio } from '../config/negocio'
-import { cerrarCaja, metodos, registrarGasto, registrarRetiro, resumenCaja, useDatos, type LineaCaja, type Metodo } from '../lib/datos'
+import { abrirCaja, anularVenta, aperturaDe, cerrarCaja, metodos, registrarGasto, registrarRetiro, resumenCaja, useDatos, type LineaCaja, type Metodo } from '../lib/datos'
 import { capital, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
 import { Cabecera, Menos } from './comun'
@@ -19,14 +19,17 @@ export function Caja() {
   const dia = sp.get('dia') ?? hoy
   const setDia = (d: string) => setSp(d === hoy ? {} : { dia: d })
   const [filtro, setFiltro] = useState<Filtro>('todo')
-  const [dialogo, setDialogo] = useState<'gasto' | 'retiro' | 'cierre' | null>(null)
+  const [dialogo, setDialogo] = useState<'gasto' | 'retiro' | 'cierre' | 'abrir' | null>(null)
+  const [anular, setAnular] = useState<LineaCaja | null>(null)
   const r = useMemo(() => resumenCaja(e, dia), [e, dia])
   const esHoy = dia === hoy
+  const apertura = aperturaDe(e, dia)
+  const sinAbrir = esHoy && !apertura && !r.cierre
 
   // Saldo del cajón (solo efectivo) después de cada movimiento, de la apertura en adelante
   const saldos = useMemo(() => {
     const m = new Map<string, number>()
-    let s = negocio.cajaInicial
+    let s = aperturaDe(e, dia)?.monto ?? negocio.cajaInicial
     for (const l of [...r.lineas].reverse()) {
       if (l.metodo === 'efectivo') s += l.monto
       m.set(l.id, s)
@@ -59,19 +62,24 @@ export function Caja() {
         </div>
       </Cabecera>
 
-      <div className={`estado-caja ${r.cierre ? 'estado-caja-cerrada' : ''}`}>
+      <div className={`estado-caja ${r.cierre ? 'estado-caja-cerrada' : ''} ${sinAbrir ? 'estado-caja-sin-abrir' : ''}`}>
         {r.cierre ? <Lock size={18} aria-hidden="true" /> : <LockOpen size={18} aria-hidden="true" />}
         {r.cierre ? (
           <p>
             <strong>Cerrada por {r.cierre.cajero}</strong> a las {hora(r.cierre.hora)}
             {r.diferencia === 0 ? ': cerró justa.' : `: ${r.diferencia! > 0 ? 'sobraron' : 'faltaron'} ${pesos(Math.abs(r.diferencia!))}.`}
           </p>
+        ) : sinAbrir ? (
+          <p>
+            <strong>La caja todavía no se abrió.</strong> Contá el cambio con el que arrancás y abrila.
+          </p>
         ) : (
           <p>
-            <strong>Abierta</strong> desde las 08:00 con {pesos(negocio.cajaInicial)} de cambio.
+            <strong>Abierta por {apertura?.cajero ?? 'el encargado'}</strong> a las {hora(apertura?.hora ?? 480)} con {pesos(apertura?.monto ?? negocio.cajaInicial)} de cambio.
           </p>
         )}
-        {!r.cierre && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
+        {sinAbrir && <button className="boton boton-chico boton-amarillo" onClick={() => setDialogo('abrir')}>Abrir caja</button>}
+        {!r.cierre && !sinAbrir && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
         {r.cierre && <Link className="boton boton-chico" to="/admin/caja/historial">Ver historial</Link>}
       </div>
 
@@ -106,14 +114,17 @@ export function Caja() {
           ) : (
             <ol className="linea-tiempo">
               {visibles.map((l) => (
-                <Movimiento key={l.id} l={l} saldo={saldos.get(l.id)!} abrir={() => l.reserva && verReserva(l.reserva)} />
+                <Movimiento key={l.id} l={l} saldo={saldos.get(l.id)!} abrir={() => l.reserva && verReserva(l.reserva)} anular={esHoy && !r.cierre && l.venta && !l.anulada ? () => setAnular(l) : undefined} />
               ))}
-              <li className="lt lt-apertura">
-                <span className="lt-hora">08:00</span>
-                <span className="lt-punto" aria-hidden="true" />
-                <span className="lt-texto"><strong>Apertura de caja</strong><small>Cambio inicial</small></span>
-                <span className="lt-saldo">{pesos(negocio.cajaInicial)}</span>
-              </li>
+              {apertura && (
+                <li className="lt lt-apertura">
+                  <span className="lt-hora">{hora(apertura.hora)}</span>
+                  <span className="lt-punto" aria-hidden="true" />
+                  <span className="lt-texto"><strong>Apertura de caja</strong><small>{apertura.cajero} contó el cambio</small></span>
+                  <span className="lt-monto">{pesos(apertura.monto)}</span>
+                  <span className="lt-saldo">{pesos(apertura.monto)}</span>
+                </li>
+              )}
             </ol>
           )}
         </section>
@@ -152,21 +163,26 @@ export function Caja() {
       {dialogo === 'gasto' && <DialogoGasto cerrar={() => setDialogo(null)} />}
       {dialogo === 'retiro' && <DialogoRetiro cerrar={() => setDialogo(null)} />}
       {dialogo === 'cierre' && <DialogoCierre dia={dia} cerrar={() => setDialogo(null)} />}
+      {dialogo === 'abrir' && <DialogoAbrir cerrar={() => setDialogo(null)} />}
+      {anular && <DialogoAnular l={anular} cerrar={() => setAnular(null)} />}
     </div>
   )
 }
 
-function Movimiento({ l, saldo, abrir }: { l: LineaCaja; saldo: number; abrir: () => void }) {
-  const entra = l.monto > 0
+function Movimiento({ l, saldo, abrir, anular }: { l: LineaCaja; saldo: number; abrir: () => void; anular?: () => void }) {
+  const entra = l.monto >= 0
   return (
-    <li className={`lt lt-${l.tipo} ${entra ? 'lt-entra' : 'lt-sale'}`}>
+    <li className={`lt lt-${l.tipo} ${entra ? 'lt-entra' : 'lt-sale'} ${l.anulada ? 'lt-anulada' : ''} ${anular ? 'lt-con-accion' : ''}`}>
       <span className="lt-hora">{hora(l.hora)}</span>
       <span className="lt-punto" aria-hidden="true">{entra ? <ArrowDownLeft size={13} /> : <ArrowUpRight size={13} />}</span>
       <button className="lt-texto" onClick={abrir} disabled={!l.reserva}>
         <strong>{l.concepto}</strong>
         <small>{l.detalle} · {metodos[l.metodo]}</small>
       </button>
-      <span className="lt-monto">{entra ? '+' : '−'}{pesos(Math.abs(l.monto))}</span>
+      <span className="lt-monto">
+        {l.monto === 0 ? pesos(0) : `${entra ? '+' : '−'}${pesos(Math.abs(l.monto))}`}
+        {anular && <button className="lt-anular" onClick={anular}>Anular</button>}
+      </span>
       <span className="lt-saldo">{l.metodo === 'efectivo' ? pesos(saldo) : ''}</span>
     </li>
   )
@@ -190,7 +206,7 @@ export function DialogoGasto({ cerrar }: { cerrar: () => void }) {
         <div className="campo">
           Categoría
           <div className="chips-filtro">
-            {negocio.categoriasGasto.map((c) => <button key={c} type="button" className={categoria === c ? 'activa' : ''} onClick={() => setCategoria(c)}>{c}</button>)}
+            {negocio.categoriasGasto.filter((c) => c !== 'Mercadería').map((c) => <button key={c} type="button" className={categoria === c ? 'activa' : ''} onClick={() => setCategoria(c)}>{c}</button>)}
           </div>
         </div>
         <label className="campo">
@@ -311,7 +327,7 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
             {dif !== 0 && <strong>{pesos(Math.abs(dif))}</strong>}
           </div>
           <dl className="ficha ficha-compacta">
-            <div><dt>Cambio al abrir</dt><dd>{pesos(negocio.cajaInicial)}</dd></div>
+            <div><dt>Cambio al abrir</dt><dd>{pesos(aperturaDe(e, dia)?.monto ?? negocio.cajaInicial)}</dd></div>
             <div><dt>Entró en efectivo</dt><dd className="bien">+{pesos(efe.filter((l) => l.monto > 0).reduce((s, l) => s + l.monto, 0))}</dd></div>
             <div><dt>Salió en efectivo (gastos y retiros)</dt><dd className="mal"><Menos n={-efe.filter((l) => l.monto < 0).reduce((s, l) => s + l.monto, 0)} /></dd></div>
             <div><dt>Tendría que haber</dt><dd>{pesos(r.esperado)}</dd></div>
@@ -333,6 +349,50 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
           </div>
         </>
       )}
+    </Dialogo>
+  )
+}
+
+/** Abrir la caja: quién la abre y con cuánto cambio arranca (contado). */
+function DialogoAbrir({ cerrar }: { cerrar: () => void }) {
+  const [monto, setMonto] = useState(String(negocio.cajaInicial))
+  const [cajero, setCajero] = useState(negocio.cajeros[0])
+  return (
+    <Dialogo abierto cerrar={cerrar} titulo="Abrir caja">
+      <form className="formulario" onSubmit={(ev) => { ev.preventDefault(); abrirCaja(Number(monto) || 0, cajero); cerrar() }}>
+        <div className="campo">
+          Quién abre
+          <div className="chips-filtro">{negocio.cajeros.map((c) => <button key={c} type="button" className={cajero === c ? 'activa' : ''} onClick={() => setCajero(c)}>{c}</button>)}</div>
+        </div>
+        <label className="campo">
+          Cambio con el que arrancás
+          <input type="number" inputMode="numeric" min={0} autoFocus value={monto} onChange={(ev) => setMonto(ev.target.value)} />
+        </label>
+        <p className="ayuda">Queda registrado quién abrió y con cuánto. Al cerrar, se compara contra este monto.</p>
+        <div className="acciones-fila">
+          <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
+          <button className="boton boton-primario">Abrir caja</button>
+        </div>
+      </form>
+    </Dialogo>
+  )
+}
+
+/** Anular una venta del mostrador: con motivo, devuelve el stock y deja la línea tachada. */
+function DialogoAnular({ l, cerrar }: { l: LineaCaja; cerrar: () => void }) {
+  const [motivo, setMotivo] = useState('Se cobró mal')
+  return (
+    <Dialogo abierto cerrar={cerrar} titulo="Anular venta">
+      <p className="anular-que"><strong>{l.concepto}</strong> · {pesos(l.monto)} en {metodos[l.metodo].toLowerCase()} a las {hora(l.hora)}</p>
+      <div className="campo">
+        Por qué
+        <div className="chips-filtro">{['Se cobró mal', 'Lo devolvieron', 'Se cargó dos veces', 'Otro'].map((m) => <button key={m} type="button" className={motivo === m ? 'activa' : ''} onClick={() => setMotivo(m)}>{m}</button>)}</div>
+      </div>
+      <p className="ayuda">La venta queda tachada en la caja (no se borra) y lo que llevaba vuelve al stock.</p>
+      <div className="acciones-fila">
+        <button className="boton" onClick={cerrar}>Cancelar</button>
+        <button className="boton boton-peligro-lleno" onClick={() => { anularVenta(l.venta!, motivo); cerrar() }}>Anular venta</button>
+      </div>
     </Dialogo>
   )
 }

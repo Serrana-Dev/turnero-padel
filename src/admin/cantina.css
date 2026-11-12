@@ -2684,3 +2684,209 @@
     font-size: 13px;
   }
 }
+
+/* Los enlaces con forma de botón no heredan el color del texto (si no, quedan azul sobre azul) */
+.admin a.boton-primario,
+.admin a.boton-wsp,
+.dialogo a.boton-wsp {
+  color: #fff;
+}
+.admin .modulo-plata a.boton-primario {
+  color: #0a1d42;
+}
+.admin a.boton-amarillo {
+  color: #0a1d42;
+}
+
+/* ——— Vuelto ——— */
+.vuelto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--soft, #f4f6fa);
+}
+.vuelto-titulo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted, #536077);
+}
+.vuelto-opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+}
+.vuelto-opciones button,
+.vuelto-opciones input {
+  height: 40px;
+  border: 1.5px solid var(--control, #d3dbe6);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0a1d42;
+  cursor: pointer;
+}
+.vuelto-opciones input {
+  min-width: 0;
+  padding: 0 10px;
+  font-weight: 600;
+  cursor: text;
+}
+.vuelto-opciones button.activa {
+  background: #0a1d42;
+  border-color: #0a1d42;
+  color: #e2f24b;
+}
+.vuelto-resultado {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #e2f24b;
+  color: #0a1d42;
+  font-weight: 600;
+}
+.vuelto-resultado strong {
+  font-size: 24px;
+  font-weight: 800;
+}
+.vuelto-falta {
+  background: #ffd9d6;
+  color: #7c1714;
+}
+.vuelto-oscuro {
+  background: rgb(255 255 255 / 0.07);
+}
+.vuelto-oscuro .vuelto-titulo {
+  color: #8ea2c8;
+}
+.vuelto-oscuro .vuelto-opciones button,
+.vuelto-oscuro .vuelto-opciones input {
+  background: transparent;
+  border-color: rgb(255 255 255 / 0.25);
+  color: #fff;
+}
+.vuelto-oscuro .vuelto-opciones input::placeholder {
+  color: #8ea2c8;
+}
+.vuelto-oscuro .vuelto-opciones button.activa {
+  background: #e2f24b;
+  border-color: #e2f24b;
+  color: #0a1d42;
+}
+.parte-vuelto {
+  grid-column: 1 / -1;
+}
+.parte-cobro .boton.activo {
+  background: #0a1d42;
+  border-color: #0a1d42;
+  color: #fff;
+}
+
+/* ——— Merma, tal cual, anular, abrir caja, descuentos ——— */
+.tal-cual {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: #e7eefb;
+  color: #133c78;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.tal-cual-caja {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f3f8c4;
+}
+.estado-caja-sin-abrir {
+  background: #fff6c2 !important;
+  border-color: #e9d46a !important;
+}
+.lt-anulada .lt-texto strong,
+.lt-anulada .lt-monto {
+  text-decoration: line-through;
+  color: var(--muted) !important;
+}
+.lt-anulada .lt-punto {
+  background: var(--soft);
+  color: var(--muted);
+}
+.lt-monto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.lt-anular {
+  padding: 2px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 99px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bad);
+  cursor: pointer;
+}
+.lt-anular:hover {
+  border-color: var(--bad);
+}
+.anular-que {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--soft);
+}
+.boton-peligro-lleno {
+  background: #b3261e;
+  border-color: #b3261e;
+  color: #fff;
+}
+.boton-peligro-lleno:hover {
+  background: #8f1a17;
+}
+.ticket-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ticket-desc > span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8ea2c8;
+}
+.ticket-ahorro {
+  margin: 0;
+  font-size: 13px;
+  color: #e2f24b;
+}
+
+.ranking-cantina .ranking-nombre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+.ranking-cantina .ranking-nombre small {
+  flex-basis: 100%;
+  padding-left: 34px;
+}
+.tarjeta-cabeza-sep {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+.lista-simple li small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}

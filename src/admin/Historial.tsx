@@ -3,7 +3,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { negocio } from '../config/negocio'
-import { metodos, resumenCaja, useDatos, type Estado, type Metodo } from '../lib/datos'
+import { aperturaDe, metodos, resumenCaja, useDatos, type Estado, type Metodo } from '../lib/datos'
 import { capital, deClave, diaMes, fechaCorta, fechaLarga, hora, hoyClave, mesAño, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
 import { Buscador, Cabecera, Chips, coincide, Menos } from './comun'
@@ -163,7 +163,7 @@ function InformeCierre({ dia, cerrar, irAlDia }: { dia: string; cerrar: () => vo
         </dl>
         <p className="z-titulo">Arqueo del efectivo</p>
         <dl>
-          <dt>Cambio inicial</dt><dd>{pesos(negocio.cajaInicial)}</dd>
+          <dt>Cambio inicial</dt><dd>{pesos(aperturaDe(e, dia)?.monto ?? negocio.cajaInicial)}</dd>
           <dt>Entró en efectivo</dt><dd>+{pesos(por('efectivo'))}</dd>
           <dt>Gastos en efectivo</dt><dd><Menos n={gastosEfe} /></dd>
           {retiros > 0 && <><dt>Retiros</dt><dd><Menos n={retiros} /></dd></>}

@@ -4,7 +4,7 @@ import { Check, Plus, X } from 'lucide-react'
 import type { Categoria } from '../config/negocio'
 import { agregarConsumo, ajustarCuenta, cobrarParte, cuantosJuegan, metodos, quitarConsumo, renombrarJugador, repartoCuenta, useDatos, type Metodo } from '../lib/datos'
 import { hora, pesos } from '../lib/formato'
-import { Buscador, categorias, coincide, IconoProducto } from './comun'
+import { Buscador, categorias, coincide, IconoProducto, Vuelto } from './comun'
 
 /** Los que juegan, con el nombre editable ahí mismo. */
 function Jugadores({ reservaId, bloqueado }: { reservaId: string; bloqueado: boolean }) {
@@ -102,6 +102,8 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
   const rep = repartoCuenta(e, reservaId)
   const c = rep.cuenta
   const [metodo, setMetodo] = useState<Record<string, Metodo>>({})
+  const [paga, setPaga] = useState<Record<string, number | null>>({})
+  const [abierto, setAbierto] = useState<string | null>(null)
   const cerrada = r.estado === 'pagada' && !!r.porCuenta
   const pagoDe = (n: string) => c.pagos.find((p) => p.nombre === n)
   const bloqueado = cerrada || c.pagos.length > 0
@@ -149,8 +151,14 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
                   <select aria-label={`Medio de pago de ${p.nombre}`} value={metodo[p.nombre] ?? 'efectivo'} onChange={(ev) => setMetodo({ ...metodo, [p.nombre]: ev.target.value as Metodo })}>
                     {Object.entries(metodos).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
-                  <button className="boton boton-chico boton-amarillo" disabled={p.monto <= 0} onClick={() => cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo')}>Cobrar</button>
+                  {(metodo[p.nombre] ?? 'efectivo') === 'efectivo' && p.monto > 0 && (
+                    <button type="button" className={`boton boton-chico ${abierto === p.nombre ? 'activo' : ''}`} onClick={() => setAbierto(abierto === p.nombre ? null : p.nombre)}>Vuelto</button>
+                  )}
+                  <button className="boton boton-chico boton-amarillo" disabled={p.monto <= 0 || (paga[p.nombre] != null && (paga[p.nombre] as number) < p.monto)} onClick={() => { cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo'); setAbierto(null) }}>Cobrar</button>
                 </span>
+              )}
+              {!pago && abierto === p.nombre && (metodo[p.nombre] ?? 'efectivo') === 'efectivo' && (
+                <div className="parte-vuelto"><Vuelto total={p.monto} paga={paga[p.nombre] ?? null} cambiar={(n) => setPaga({ ...paga, [p.nombre]: n })} /></div>
               )}
             </li>
           )

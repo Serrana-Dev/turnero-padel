@@ -34,6 +34,10 @@ Es todo frontend: los datos de prueba se generan solos y se guardan en el navega
     diferencia, e informe de cierre de cada día.
   - **Gastos** (`#/admin/gastos`): en qué se va la plata, por categoría y por día, contra el mes anterior.
   - **Reportes**.
+- **Cobros**: calculadora de vuelto en efectivo (en el mostrador y en el cobro de cada jugador), descuento del 10 o 20 %,
+  "invita la casa" (sale del stock, no entra plata) y anulación de ventas con motivo (queda tachada y el stock vuelve).
+- **Abrir caja** con cajero y cambio contado, **mermas** con motivo y costo perdido, subproductos que **se venden tal
+  cual** (una lata: se crea el producto solo) y **Reportes** de la cantina con descarga a Excel de los movimientos.
 - En el celular, el panel tiene una barra abajo (Canchas, Vender, Caja, Stock y Más).
 
 Lo que se reserva en la web aparece en el panel. **Reiniciar demo** vuelve todo a cero.

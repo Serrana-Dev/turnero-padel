@@ -33,17 +33,27 @@ export type Reserva = {
 }
 
 export type Fijo = { id: string; canchaId: string; dow: number; inicio: number; titular: string; telefono: string; desde: string }
-export type Venta = { id: string; dia: string; hora: number; itemId: string; monto: number; metodo: Metodo; cantidad?: number; reservaId?: string; quien?: string }
+export type Venta = {
+  id: string; dia: string; hora: number; itemId: string; monto: number; metodo: Metodo; cantidad?: number; reservaId?: string; quien?: string
+  /** Motivo si se anuló: no suma en la caja y el stock volvió. */
+  anulada?: string
+  /** Invita la casa: sale de stock pero no se cobra. */
+  cortesia?: boolean
+  /** Porcentaje de descuento que se hizo (10 = 10 %). */
+  descuento?: number
+}
 
 /** Lo que se consumió en una cancha: a nombre de alguien o para todos (quien null). */
 export type Consumo = { id: string; itemId: string; quien: string | null; hora: number }
 export type Pago = { nombre: string; monto: number; metodo: Metodo; hora: number }
 /** La cuenta abierta de un turno: quiénes juegan, qué consumieron y quién ya pagó. */
 export type Cuenta = { reservaId: string; nombres: string[]; consumos: Consumo[]; pagos: Pago[]; modo: 'partes' | 'persona'; partes: number }
-export type MovStock = { id: string; dia: string; hora: number; insumoId: string; cantidad: number; motivo: 'venta' | 'compra' | 'ajuste'; detalle: string }
+export type MovStock = { id: string; dia: string; hora: number; insumoId: string; cantidad: number; motivo: 'venta' | 'compra' | 'ajuste' | 'merma'; detalle: string }
 export type Compra = { id: string; dia: string; proveedor: string; items: { insumoId: string; cantidad: number; costo: number }[]; total: number; metodo: Metodo }
 export type Gasto = { id: string; dia: string; hora: number; categoria: string; concepto: string; monto: number; metodo: Metodo; compraId?: string }
 export type Cierre = { dia: string; apertura: number; contado: number; hora: number; cajero: string; abrio: number }
+/** Quién abrió la caja, a qué hora y con cuánto cambio contado. */
+export type Apertura = { dia: string; hora: number; monto: number; cajero: string }
 /** Plata en efectivo que se saca de la caja (para depositar, pagarle a alguien) o que se pone (cambio extra). */
 export type Retiro = { id: string; dia: string; hora: number; tipo: 'retiro' | 'ingreso'; monto: number; motivo: string; quien: string }
 export type Solicitud = { id: string; nombre: string; telefono: string; dow: number; inicio: number; creada: string }
@@ -64,12 +74,13 @@ export type Estado = {
   cuentas: Cuenta[]
   cierres: Cierre[]
   retiros: Retiro[]
+  aperturas: Apertura[]
   /** La carta y los insumos se pueden editar desde el panel. */
   productos: ItemCantina[]
   insumos: Insumo[]
 }
 
-const VERSION = 8
+const VERSION = 9
 const CLAVE = 'tresmuros-demo'
 
 function azar(semilla: number) {
@@ -166,7 +177,10 @@ function generar(): Estado {
       const it = itemAzar()
       const h = it.categoria === 'Cocina' || it.categoria === 'Combos' ? 1110 + Math.floor(r() * 300) : 600 + Math.floor(r() * 840)
       if (d === 0 && h > ahora) continue
-      ventas.push({ id: `v${ventas.length}`, dia, hora: h, itemId: it.id, monto: it.precio, metodo: metodoAzar(), cantidad: 1 })
+      const x = r()
+      // De vez en cuando se anula una venta o invita la casa, como pasa en cualquier barra
+      const extra: Partial<Venta> = x < 0.012 ? { anulada: ['Se cobró mal', 'Se cargó dos veces'][Math.floor(r() * 2)] } : x < 0.03 && it.categoria !== 'Deportes' ? { cortesia: true } : {}
+      ventas.push({ id: `v${ventas.length}`, dia, hora: h, itemId: it.id, monto: extra.cortesia ? 0 : it.precio, metodo: metodoAzar(), cantidad: 1, ...extra })
     }
   }
 
@@ -200,6 +214,14 @@ function generar(): Estado {
       if (d >= -6) lista.forEach((x) => movimientos.push({ id: `m${movimientos.length}`, dia, hora: 630, insumoId: x.insumoId, cantidad: x.cantidad, motivo: 'compra', detalle: prov }))
     }
   }
+
+  // Mermas de las últimas semanas: lo que se venció o se cayó
+  const mermas: [number, string, number, string][] = [
+    [-3, 'verdura', 400, 'Se venció'], [-6, 'pan-hamb', 6, 'Se venció'], [-9, 'cerveza', 2, 'Se cayó o se rompió'],
+    [-12, 'medallon', 3, 'Salió mal en la cocina'], [-17, 'pan-miga', 8, 'Se venció'], [-22, 'fernet', 300, 'Se cayó o se rompió'],
+  ]
+  for (const [d, insumoId, cantidad, motivo] of mermas)
+    movimientos.push({ id: `m${movimientos.length}`, dia: sumarDias(hoy, d), hora: 600 + Math.floor(r() * 600), insumoId, cantidad: -cantidad, motivo: 'merma', detalle: motivo })
 
   // Gastos fijos del mes y los chicos de todos los días
   for (let d = -62; d <= 0; d++) {
@@ -261,7 +283,13 @@ function generar(): Estado {
   }
   const parcial: Estado = {
     version: VERSION, generado: hoy, reservas, fijos, ventas, solicitudes, competencias: [], stock, movimientos, compras, gastos, cuentas,
-    cierres: [], retiros: [], productos, insumos,
+    cierres: [], retiros: [], aperturas: [], productos, insumos,
+  }
+  // Aperturas: cada día el cajero abre a las 8 con el cambio contado (hoy, solo si ya abrió)
+  for (let d = -45; d <= 0; d++) {
+    const dia = sumarDias(hoy, d)
+    if (d === 0 && ahora < 470) continue
+    parcial.aperturas.push({ dia, hora: 470 + Math.floor(r() * 15), monto: negocio.cajaInicial, cajero: cajeroDe(dia) })
   }
   // Retiros de efectivo: cuando se junta mucha plata en la caja, el encargado saca para depositar
   const retiros: Retiro[] = []
@@ -280,7 +308,8 @@ function generar(): Estado {
   for (let d = -45; d <= -1; d++) {
     const dia = sumarDias(hoy, d)
     const dif = r() < 0.8 ? 0 : [-500, 1000, -2000, 500, -1500][Math.floor(r() * 5)]
-    cierres.push({ dia, apertura: negocio.cajaInicial, contado: efectivoEsperado(parcial, dia) + dif, hora: 1465 + Math.floor(r() * 25), cajero: cajeroDe(dia), abrio: 470 + Math.floor(r() * 15) })
+    const ap = parcial.aperturas.find((a) => a.dia === dia)!
+    cierres.push({ dia, apertura: ap.monto, contado: efectivoEsperado(parcial, dia) + dif, hora: 1465 + Math.floor(r() * 25), cajero: cajeroDe(dia), abrio: ap.hora })
   }
   return { ...parcial, competencias: competenciasDeMuestra(hoy, r), cierres }
 }
@@ -405,16 +434,44 @@ export function vender(v: Omit<Venta, 'id'>) {
 }
 
 /** Cobra un ticket entero del mostrador: cada línea es una venta y descuenta su receta. */
-export function venderTicket(lineas: { itemId: string; cantidad: number }[], metodo: Metodo) {
+export function venderTicket(lineas: { itemId: string; cantidad: number }[], metodo: Metodo, descuento = 0, cortesia = false) {
   let e = estado
   const ventas: Venta[] = []
   lineas.forEach((l, i) => {
     const it = productoDe(e, l.itemId)
     if (!it || l.cantidad <= 0) return
-    e = { ...e, ...moverStock(e, l.itemId, l.cantidad, it.nombre) }
-    ventas.push({ id: `v${Date.now()}${i}`, dia: hoyClave(), hora: ahoraMin(), itemId: l.itemId, monto: it.precio * l.cantidad, metodo, cantidad: l.cantidad })
+    e = { ...e, ...moverStock(e, l.itemId, l.cantidad, cortesia ? `${it.nombre} (invita la casa)` : it.nombre) }
+    const monto = cortesia ? 0 : Math.round((it.precio * l.cantidad * (1 - descuento / 100)) / 100) * 100
+    ventas.push({ id: `v${Date.now()}${i}`, dia: hoyClave(), hora: ahoraMin(), itemId: l.itemId, monto, metodo, cantidad: l.cantidad, ...(cortesia ? { cortesia } : {}), ...(descuento && !cortesia ? { descuento } : {}) })
   })
   guardar({ ...e, ventas: [...e.ventas, ...ventas] })
+}
+
+/** Anula una venta del mostrador: deja de sumar en la caja y el stock vuelve. */
+export function anularVenta(id: string, motivo: string) {
+  const v = estado.ventas.find((x) => x.id === id)
+  if (!v || v.anulada) return
+  const it = productoDe(estado, v.itemId)
+  const stock = { ...estado.stock }
+  const movs: MovStock[] = explotar(estado, v.itemId, v.cantidad ?? 1).map((l, i) => {
+    stock[l.insumoId] = Math.round(((stock[l.insumoId] ?? 0) + l.cantidad) * 10) / 10
+    return { id: `m${Date.now()}a${i}`, dia: hoyClave(), hora: ahoraMin(), insumoId: l.insumoId, cantidad: l.cantidad, motivo: 'ajuste', detalle: `${it?.nombre ?? ''} anulado: ${motivo.toLowerCase()}` }
+  })
+  guardar({ ...estado, stock, movimientos: [...estado.movimientos, ...movs], ventas: estado.ventas.map((x) => (x.id === id ? { ...x, anulada: motivo } : x)) })
+}
+/** Lo que se tira (se venció, se cayó): sale del stock y queda registrado aparte, con su costo. */
+export function registrarMerma(insumoId: string, cantidad: number, motivo: string) {
+  if (cantidad <= 0) return
+  guardar({
+    ...estado,
+    stock: { ...estado.stock, [insumoId]: Math.round(((estado.stock[insumoId] ?? 0) - cantidad) * 10) / 10 },
+    movimientos: [...estado.movimientos, { id: `m${Date.now()}`, dia: hoyClave(), hora: ahoraMin(), insumoId, cantidad: -cantidad, motivo: 'merma', detalle: motivo }],
+  })
+}
+export const abrirCaja = (monto: number, cajero: string) =>
+  guardar({ ...estado, aperturas: [...estado.aperturas.filter((a) => a.dia !== hoyClave()), { dia: hoyClave(), hora: ahoraMin(), monto, cajero }] })
+export function aperturaDe(e: Pick<Estado, 'aperturas'>, dia: string) {
+  return (e.aperturas ?? []).find((a) => a.dia === dia)
 }
 
 // ——— Carta: productos, recetas e insumos ———
@@ -572,7 +629,7 @@ export const registrarGasto = (g: Omit<Gasto, 'id' | 'dia' | 'hora'>) =>
 export const registrarRetiro = (x: Omit<Retiro, 'id' | 'dia' | 'hora'>) =>
   guardar({ ...estado, retiros: [...estado.retiros, { ...x, id: `rt${Date.now()}`, dia: hoyClave(), hora: ahoraMin() }] })
 export const cerrarCaja = (dia: string, contado: number, cajero: string) =>
-  guardar({ ...estado, cierres: [...estado.cierres.filter((c) => c.dia !== dia), { dia, apertura: negocio.cajaInicial, contado, hora: ahoraMin(), cajero, abrio: 480 }] })
+  guardar({ ...estado, cierres: [...estado.cierres.filter((c) => c.dia !== dia), { dia, apertura: aperturaDe(estado, dia)?.monto ?? negocio.cajaInicial, contado, hora: ahoraMin(), cajero, abrio: aperturaDe(estado, dia)?.hora ?? 480 }] })
 
 export const pedirFijo = (s: Omit<Solicitud, 'id' | 'creada'>) =>
   guardar({ ...estado, solicitudes: [...estado.solicitudes, { ...s, id: `s${Date.now()}`, creada: hoyClave() }] })
@@ -611,7 +668,7 @@ export const cargarResultado = (competenciaId: string, partidoId: string, sets: 
 
 // ——— Consultas ———
 
-export type LineaCaja = { id: string; hora: number; tipo: 'cancha' | 'cantina' | 'gasto' | 'retiro'; concepto: string; detalle: string; metodo: Metodo; monto: number; reserva?: string }
+export type LineaCaja = { id: string; hora: number; tipo: 'cancha' | 'cantina' | 'gasto' | 'retiro'; concepto: string; detalle: string; metodo: Metodo; monto: number; reserva?: string; venta?: string; anulada?: boolean }
 
 export function productoDe(e: Pick<Estado, 'productos'>, id: string) {
   return e.productos.find((x) => x.id === id)
@@ -640,7 +697,8 @@ export function movimientosCaja(e: Estado, dia: string): LineaCaja[] {
   for (const v of e.ventas.filter((x) => x.dia === dia && !x.reservaId)) {
     const it = productoDe(e, v.itemId)
     const n = v.cantidad ?? 1
-    lineas.push({ id: v.id, hora: v.hora, tipo: 'cantina', concepto: `${n > 1 ? `${n} × ` : ''}${it?.nombre ?? v.itemId}`, detalle: `Cantina · ${it?.categoria ?? ''}`, metodo: v.metodo, monto: v.monto })
+    const detalle = v.anulada ? `Anulada: ${v.anulada.toLowerCase()}` : v.cortesia ? 'Invita la casa' : v.descuento ? `Cantina · ${v.descuento} % de descuento` : `Cantina · ${it?.categoria ?? ''}`
+    lineas.push({ id: v.id, hora: v.hora, tipo: 'cantina', concepto: `${n > 1 ? `${n} × ` : ''}${it?.nombre ?? v.itemId}`, detalle, metodo: v.metodo, monto: v.anulada || v.cortesia ? 0 : v.monto, venta: v.id, anulada: !!v.anulada })
   }
   for (const g of e.gastos.filter((x) => x.dia === dia))
     lineas.push({ id: g.id, hora: g.hora, tipo: 'gasto', concepto: g.concepto, detalle: g.categoria, metodo: g.metodo, monto: -g.monto })
@@ -651,7 +709,7 @@ export function movimientosCaja(e: Estado, dia: string): LineaCaja[] {
 
 /** Lo que tendría que haber en efectivo en la caja al cerrar. */
 export function efectivoEsperado(e: Estado, dia: string) {
-  return negocio.cajaInicial + movimientosCaja(e, dia).filter((l) => l.metodo === 'efectivo').reduce((s, l) => s + l.monto, 0)
+  return (aperturaDe(e, dia)?.monto ?? negocio.cajaInicial) + movimientosCaja(e, dia).filter((l) => l.metodo === 'efectivo').reduce((s, l) => s + l.monto, 0)
 }
 
 /** El resumen de un día de caja: lo que entró, lo que salió (sin contar retiros, que no son gastos) y el arqueo. */
@@ -713,7 +771,7 @@ export function costeo(e: Estado, itemId: string) {
 /** Unidades vendidas de cada producto desde un día (incluye lo consumido en las canchas). */
 export function vendidosDesde(e: Estado, desde: string) {
   const m = new Map<string, number>()
-  for (const v of e.ventas) if (v.dia >= desde) m.set(v.itemId, (m.get(v.itemId) ?? 0) + (v.cantidad ?? 1))
+  for (const v of e.ventas) if (v.dia >= desde && !v.anulada) m.set(v.itemId, (m.get(v.itemId) ?? 0) + (v.cantidad ?? 1))
   return m
 }
 

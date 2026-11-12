@@ -1,8 +1,9 @@
-import { Cabecera } from './comun'
+import { Cabecera, IconoProducto } from './comun'
+import { Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { negocio } from '../config/negocio'
 import { deClave, diaMes, hora, hoyClave, mesAño, pct, pesos, sumarDias } from '../lib/formato'
-import { aceptarSolicitud, darDeBajaFijo, ocupada, rechazarSolicitud, useDatos } from '../lib/datos'
+import { aceptarSolicitud, costeo, darDeBajaFijo, insumoDe, metodos, movimientosCaja, ocupada, productoDe, rechazarSolicitud, useDatos, type Metodo } from '../lib/datos'
 
 const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
@@ -121,7 +122,7 @@ export function Reportes() {
     })
     const ingresos = periodo.reduce((s, x) => s + x.precio, 0)
     const ingresosAntes = antes.reduce((s, x) => s + x.precio, 0)
-    const cantina = e.ventas.filter((v) => v.dia >= desde).reduce((s, v) => s + v.monto, 0)
+    const cantina = e.ventas.filter((v) => v.dia >= desde && !v.anulada).reduce((s, v) => s + v.monto, 0)
     const origen = (['web', 'whatsapp', 'fijo'] as const).map((o) => ({ o, n: periodo.filter((x) => x.origen === o).length }))
     const siesta = calor.flatMap((f) => f.celdas.slice(3, 6))
     return { periodo, calor, porCancha, ingresos, ingresosAntes, cantina, origen, siesta: siesta.reduce((a, b) => a + b, 0) / siesta.length }
@@ -133,7 +134,9 @@ export function Reportes() {
 
   return (
     <div className="pantalla">
-      <Cabecera seccion="plata" titulo="Reportes" frase={<>Últimas 4 semanas, del {diaMes(desde)} al {diaMes(hoy)}, contra las 4 anteriores.</>} />
+      <Cabecera seccion="plata" titulo="Reportes" frase={<>Últimas 4 semanas, del {diaMes(desde)} al {diaMes(hoy)}, contra las 4 anteriores.</>}>
+        <button className="boton boton-primario" onClick={() => descargarExcel(e, desde, hoy)}><Download size={16} aria-hidden="true" /> Descargar Excel</button>
+      </Cabecera>
       <div className="kpis">
         <div className="kpi"><span>Ingresos por canchas</span><strong>{pesos(r.ingresos)}</strong><small className={cambio >= 0 ? 'bien' : 'mal'}>{cambio >= 0 ? '+' : '−'}{pct(Math.abs(cambio))} contra las 4 semanas anteriores</small></div>
         <div className="kpi"><span>Ocupación</span><strong>{pct(ocupacion)}</strong><small>{r.periodo.length} turnos jugados o reservados</small></div>
@@ -189,6 +192,74 @@ export function Reportes() {
           <p className="ayuda">Cada reserva por la web es un WhatsApp menos para contestar.</p>
         </section>
       </div>
+      <ReporteCantina desde={desde} hoy={hoy} />
     </div>
   )
+}
+
+/** La cantina en el período: qué se vende, cuánto deja, cómo pagan y lo que se pierde. */
+function ReporteCantina({ desde, hoy }: { desde: string; hoy: string }) {
+  const e = useDatos()
+  const ventas = e.ventas.filter((v) => v.dia >= desde && v.dia <= hoy && !v.anulada)
+  const porProd = new Map<string, { n: number; plata: number }>()
+  for (const v of ventas) {
+    const x = porProd.get(v.itemId) ?? { n: 0, plata: 0 }
+    x.n += v.cantidad ?? 1
+    x.plata += v.monto
+    porProd.set(v.itemId, x)
+  }
+  const ranking = [...porProd].map(([id, x]) => ({ p: productoDe(e, id), ...x, deja: x.n * costeo(e, id).ganancia })).filter((x) => x.p).sort((a, b) => b.plata - a.plata).slice(0, 8)
+  const max = Math.max(...ranking.map((x) => x.plata), 1)
+  const porMetodo = (Object.keys(metodos) as Metodo[]).map((m) => ({ m, t: ventas.filter((v) => v.metodo === m && !v.reservaId).reduce((s, v) => s + v.monto, 0) }))
+  const totalMet = porMetodo.reduce((s, x) => s + x.t, 0) || 1
+  const cortesias = ventas.filter((v) => v.cortesia).reduce((s, v) => s + (v.cantidad ?? 1) * costeo(e, v.itemId).costo, 0)
+  const mermas = e.movimientos.filter((m) => m.motivo === 'merma' && m.dia >= desde).reduce((s, m) => s + Math.abs(m.cantidad) * (insumoDe(e, m.insumoId)?.costo ?? 0), 0)
+  const anuladas = e.ventas.filter((v) => v.dia >= desde && v.anulada).length
+  return (
+    <div className="grilla-2">
+      <section className="tarjeta">
+        <div className="tarjeta-cabeza"><h2>Lo más vendido de la cantina</h2><span className="tenue">plata que entró · lo que deja</span></div>
+        <ul className="ranking ranking-cantina">
+          {ranking.map((x) => (
+            <li key={x.p!.id}>
+              <span className="ranking-nombre"><IconoProducto p={x.p!} tam={26} icono={14} /> {x.p!.nombre}<small>{x.n} u. · deja {pesos(x.deja)}</small></span>
+              <span className="ranking-barra"><span style={{ width: `${(x.plata / max) * 100}%` }} /></span>
+              <span className="ranking-valor">{pesos(x.plata)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="tarjeta">
+        <div className="tarjeta-cabeza"><h2>Cómo pagan en el mostrador</h2></div>
+        <div className="apilada">
+          {porMetodo.map((x) => <i key={x.m} style={{ flexGrow: x.t, background: x.m === 'efectivo' ? '#e2f24b' : x.m === 'mercadopago' ? '#2f6fd6' : '#0a1d42' }} />)}
+        </div>
+        <ul className="lista-simple">
+          {porMetodo.map((x) => <li key={x.m}><span>{metodos[x.m]}</span><strong>{pesos(x.t)} · {pct(x.t / totalMet)}</strong></li>)}
+        </ul>
+        <div className="tarjeta-cabeza tarjeta-cabeza-sep"><h2>Lo que no entró</h2></div>
+        <ul className="lista-simple">
+          <li><span>Invitó la casa<small>a costo de los insumos</small></span><strong>{pesos(cortesias)}</strong></li>
+          <li><span>Mermas<small>lo que se venció o se cayó</small></span><strong>{pesos(mermas)}</strong></li>
+          <li><span>Ventas anuladas<small>con motivo, en la caja de cada día</small></span><strong>{anuladas}</strong></li>
+        </ul>
+      </section>
+    </div>
+  )
+}
+
+/** Baja un Excel (CSV) con todos los movimientos de caja del período, listo para el contador. */
+function descargarExcel(e: ReturnType<typeof useDatos>, desde: string, hasta: string) {
+  const filas = [['Fecha', 'Hora', 'Tipo', 'Concepto', 'Detalle', 'Medio de pago', 'Monto']]
+  for (let d = desde; d <= hasta; d = sumarDias(d, 1)) {
+    for (const l of [...movimientosCaja(e, d)].reverse()) {
+      filas.push([d, hora(l.hora), l.tipo === 'cancha' ? 'Cancha' : l.tipo === 'cantina' ? 'Cantina' : l.tipo === 'gasto' ? 'Gasto' : 'Retiro/ingreso', l.concepto, l.detalle, metodos[l.metodo], String(l.monto)])
+    }
+  }
+  const csv = '\ufeff' + filas.map((f) => f.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  a.download = `caja-${desde}-al-${hasta}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
 }
