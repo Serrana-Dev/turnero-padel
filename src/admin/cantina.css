@@ -3621,3 +3621,8 @@ div.resumen-dato:hover {
 .fijo-texto small {
   display: block;
 }
+
+/* En monitores anchos la hoja se usa entera (antes quedaba un hueco blanco a la derecha) */
+.pantalla {
+  max-width: none;
+}
