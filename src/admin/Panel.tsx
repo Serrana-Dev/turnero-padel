@@ -50,13 +50,6 @@ const barraCelu = [
   { a: '/admin/subproductos', texto: 'Stock', icono: Package },
 ]
 
-/** El nombre de la pantalla en la que estás, para la barra de arriba del celular. */
-function seccionActual(ruta: string) {
-  if (ruta.startsWith('/admin/productos/')) return 'Receta'
-  const todos = menu.flatMap((g) => g.items).sort((a, b) => b.a.length - a.a.length)
-  return todos.find((x) => ruta === x.a || ruta.startsWith(x.a + '/'))?.texto ?? 'Panel'
-}
-
 export function Layout() {
   const e = useDatos()
   const [abierto, setAbierto] = useState(false)
@@ -109,7 +102,7 @@ export function Layout() {
       </aside>
       <header className="superior">
         <button className="btn-icono solo-telefono" onClick={() => setAbierto(!abierto)} aria-label="Menú"><Menu size={20} /></button>
-        <p className="superior-seccion">{seccionActual(lugar.pathname)}</p>
+        <p className="superior-seccion">{negocio.nombre}</p>
         <p className="superior-texto">{capital(fechaLarga(hoyClave()))}<span className="superior-detalle">{esHoraDemo() ? `, demo a las ${hora(ahoraMin())} (hora pico)` : ", abierto de 8:00 a 00:30"}</span></p>
         <Link to="/" className="boton boton-chico">Reservar como cliente</Link>
       </header>
@@ -239,8 +232,8 @@ function ResumenDia({ ocupacion, libresPico, paraCobrar, verReserva }: { ocupaci
         <strong className="resumen-total">{pesos(r.entro)}</strong>
         <span className="resumen-barra" aria-hidden="true"><i style={{ width: `${pctCanchas * 100}%` }} /></span>
         <span className="resumen-partes">
-          <span><i className="punto punto-canchas" /> Canchas {pesos(r.canchas)}</span>
-          <span><i className="punto punto-cantina" /> Cantina {pesos(r.cantina)}</span>
+          <span><i className="leyenda-punto punto-canchas" /> Canchas {pesos(r.canchas)}</span>
+          <span><i className="leyenda-punto punto-cantina" /> Cantina {pesos(r.cantina)}</span>
         </span>
         <span className="resumen-caja">
           {r.cierre ? `Caja cerrada por ${r.cierre.cajero}` : ap ? `Caja abierta por ${ap.cajero} desde las ${hora(ap.hora)}` : 'La caja todavía no se abrió'} · en el cajón {pesos(r.cierre ? r.cierre.contado : r.esperado)}
@@ -363,7 +356,7 @@ function PorCancha({ delDia, dia, verReserva }: { delDia: Reserva[]; dia: string
                   <span className="lista-hora">{hora(t)}</span>
                   <span className="lista-texto">
                     {r.titular}
-                    <small>{r.origen === 'fijo' ? 'Turno fijo' : estados[r.estado]}</small>
+                    <small>{r.origen === 'fijo' ? 'Turno fijo' : r.origen === 'web' ? 'Reservó por la web' : 'Reservó por WhatsApp'}</small>
                   </span>
                   <span className={`estado estado-${r.estado}`}>{r.estado === 'pagada' ? 'Pagada' : pesos(r.precio - r.seña)}</span>
                 </button>

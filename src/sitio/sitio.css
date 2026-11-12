@@ -17,6 +17,7 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   min-height: 100vh;
+  min-height: 100svh;
   background: var(--fondo);
   color: var(--tinta);
   font-family: 'Barlow', system-ui, sans-serif;
@@ -1288,4 +1289,9 @@
   background: #1fa855;
   color: #fff;
   text-decoration: none;
+}
+
+/* La franja de demo de arriba de la web también se corre debajo del notch */
+.barra-demo {
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
 }

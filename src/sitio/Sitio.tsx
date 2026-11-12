@@ -75,7 +75,7 @@ function Portada() {
           {negocio.barrio}, {negocio.ciudad}
         </p>
         <h1>{negocio.nombre}</h1>
-        <p className="portada-bajada">Cuatro canchas de blindex, liga todo el año y torneo el último fin de semana del mes. Reservás acá y señás por transferencia.</p>
+        <p className="portada-bajada">Cuatro canchas (tres de blindex), liga todo el año y torneo el último fin de semana del mes. Reservás acá y señás por transferencia.</p>
         <div className="portada-acciones">
           <a className="btn btn-pelota" href="#reservar">
             Reservar cancha
@@ -244,10 +244,10 @@ function FormReserva({ eleccion, cerrar }: { eleccion: Eleccion | null; cerrar: 
           </label>
           <label>
             WhatsApp
-            <input required name="telefono" type="tel" value={tel} onChange={(ev) => setTel(ev.target.value)} inputMode="tel" placeholder="351 000-0000…" autoComplete="tel" />
+            <input required name="telefono" type="tel" value={tel} onChange={(ev) => setTel(ev.target.value)} inputMode="tel" placeholder="351 000-0000" autoComplete="tel" />
           </label>
           {pago === 'ok' ? (
-            <p className="pago-ok">Listo: avisaste la transferencia de la seña ({pesos(negocio.seña)}). El club la confirma por WhatsApp.</p>
+            <p className="pago-ok">Seña avisada ({pesos(negocio.seña)}). Ahora confirmá la reserva y el club la valida por WhatsApp.</p>
           ) : (
             <div className="transferir">
               <p>Para asegurar el turno, transferí la seña de <strong>{pesos(negocio.seña)}</strong> a este alias:</p>
@@ -260,7 +260,7 @@ function FormReserva({ eleccion, cerrar }: { eleccion: Eleccion | null; cerrar: 
             </div>
           )}
           <p className="tenue chico">Es una demo: no se transfiere nada de verdad. El resto, {pesos(precio - negocio.seña)}, se paga en el club al terminar, junto con lo que consumas.</p>
-          <button className={pago === 'ok' ? 'btn btn-primario' : 'btn btn-secundario-link'} disabled={!nombre || !tel}>
+          <button className={pago === 'ok' ? 'btn btn-pelota' : 'btn btn-secundario-link'} disabled={!nombre || !tel}>
             {pago === 'ok' ? 'Confirmar reserva' : 'O reservar sin seña (queda pendiente)'}
           </button>
         </form>

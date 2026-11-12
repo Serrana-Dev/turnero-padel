@@ -80,7 +80,7 @@ export type Estado = {
   insumos: Insumo[]
 }
 
-const VERSION = 11
+const VERSION = 12
 const CLAVE = 'tresmuros-demo'
 
 function azar(semilla: number) {
@@ -122,6 +122,7 @@ function generar(): Estado {
     // Todos los horarios tienen al menos un turno: así siempre hay una cancha jugándose y otra para cobrar
     for (const inicio of negocio.turnos) {
       let hay = 0
+      const forzarEn = Math.floor(r() * negocio.canchas.length)
       for (const [ci, c] of negocio.canchas.entries()) {
         const fijo = fijos.find((f) => f.dow === dow && f.inicio === inicio && f.canchaId === c.id)
         // Ocupación: noches y fines de semana llenos, siesta más tranquila
@@ -129,7 +130,7 @@ function generar(): Estado {
         if (dow === 0 || dow === 6) p = inicio >= 1380 ? 0.4 : 0.66
         if (!c.techada && inicio >= 840 && inicio < 1020 && dow !== 0 && dow !== 6) p *= 0.6
         if (d > 0) p *= Math.max(0.25, 1 - d * 0.09)
-        const forzado = !hay && ci === negocio.canchas.length - 1 && d <= 3
+        const forzado = !hay && ci >= forzarEn && d <= 3
         if (!fijo && !forzado && r() > p) continue
         const pasada = d < 0 || (d === 0 && inicio + negocio.duracion <= ahora)
         const enCurso = d === 0 && inicio <= ahora && inicio + negocio.duracion > ahora
@@ -177,7 +178,7 @@ function generar(): Estado {
   const ventas: Venta[] = []
   for (let d = -62; d <= 0; d++) {
     const dia = sumarDias(hoy, d)
-    const cuantas = 10 + Math.floor(r() * 20)
+    const cuantas = 10 + Math.floor(r() * 20) + (d === 0 ? 12 : 0)
     for (let i = 0; i < cuantas; i++) {
       const it = itemAzar()
       const h = it.categoria === 'Cocina' || it.categoria === 'Combos' ? 1110 + Math.floor(r() * 300) : 600 + Math.floor(r() * 840)
@@ -505,7 +506,7 @@ const conCuenta = (e: Estado, c: Cuenta) => [...e.cuentas.filter((x) => x.reserv
 export function agregarConsumo(reservaId: string, itemId: string, quien: string | null) {
   const c = cuentaDe(estado, reservaId)
   const it = productoDe(estado, itemId)!
-  const nueva = { ...c, consumos: [...c.consumos, { id: `cc${Date.now()}${Math.random().toString(36).slice(2, 6)}`, itemId, quien, hora: ahoraMin() }] }
+  const nueva = { ...c, modo: quien && !c.pagos.length ? ('persona' as const) : c.modo, consumos: [...c.consumos, { id: `cc${Date.now()}${Math.random().toString(36).slice(2, 6)}`, itemId, quien, hora: ahoraMin() }] }
   guardar({ ...estado, ...moverStock(estado, itemId, 1, it.nombre), cuentas: conCuenta(estado, nueva) })
 }
 export function quitarConsumo(reservaId: string, consumoId: string) {
@@ -533,21 +534,19 @@ export function renombrarJugador(reservaId: string, viejo: string, nuevo: string
     }),
   })
 }
-/** Entre cuántos se divide: agrega lugares "Jugador N" o saca los últimos que no pagaron ni consumieron. */
+/**
+ * Cuántos pagan: los primeros N de los que juegan. No se borra a nadie de la lista,
+ * así se puede volver atrás; lo que consumió alguien que no paga pasa a dividirse entre los que pagan.
+ */
 export function cuantosJuegan(reservaId: string, n: number) {
   const c = cuentaDe(estado, reservaId)
-  let nombres = [...c.nombres]
+  const nombres = [...c.nombres]
   for (let i = nombres.length; i < n; i++) {
     let k = i + 1
     while (nombres.includes(`Jugador ${k}`)) k++
     nombres.push(`Jugador ${k}`)
   }
-  while (nombres.length > n) {
-    const ult = nombres[nombres.length - 1]
-    if (c.pagos.some((p) => p.nombre === ult)) break
-    nombres = nombres.slice(0, -1)
-  }
-  guardar({ ...estado, cuentas: conCuenta(estado, { ...c, nombres, partes: nombres.length, consumos: c.consumos.map((x) => (x.quien && !nombres.includes(x.quien) ? { ...x, quien: null } : x)) }) })
+  guardar({ ...estado, cuentas: conCuenta(estado, { ...c, nombres, partes: n }) })
 }
 
 /** Una línea del ticket de cada jugador: qué es y cuánto le toca. */
@@ -562,7 +561,8 @@ export function repartoCuenta(e: Estado, reservaId: string, modo?: Cuenta['modo'
   const saldoCancha = r.estado === 'pagada' && !r.porCuenta ? 0 : r.precio - r.seña
   const consumos = c.consumos.reduce((s, x) => s + precioDeItem(x.itemId), 0)
   const total = saldoCancha + consumos
-  const gente = c.nombres.length ? c.nombres : ['Titular']
+  // Pagan los primeros N de los que juegan (por defecto, todos)
+  const gente = (c.nombres.length ? c.nombres : ['Titular']).slice(0, Math.max(1, Math.min(c.partes || c.nombres.length, c.nombres.length || 1)))
   const n = gente.length
   /** Agrupa consumos iguales: "2 × Agua 500 ml". */
   const agrupar = (lista: Consumo[]) => {

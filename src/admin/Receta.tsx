@@ -91,7 +91,7 @@ function EditorReceta({ id }: { id: string }) {
         <label className="receta-precio-campo">
           <span>Precio de venta</span>
           <span className="con-signo">
-            $<input type="number" inputMode="numeric" min={0} step={100} value={p.precio || ''} onChange={(ev) => set({ precio: Number(ev.target.value) })} placeholder="0" />
+            $<input type="text" inputMode="numeric" value={p.precio ? p.precio.toLocaleString('es-AR') : ''} onChange={(ev) => set({ precio: Number(ev.target.value.replace(/\D/g, '')) || 0 })} placeholder="0" aria-label="Precio de venta" />
           </span>
         </label>
       </section>
@@ -117,7 +117,7 @@ function EditorReceta({ id }: { id: string }) {
                     <span className="receta-fila-color" style={{ background: paleta[i % paleta.length] }} aria-hidden="true" />
                     <span className="receta-fila-texto">
                       <strong>{nombre}{l.productoId && <em className="etiqueta-producto">producto</em>}</strong>
-                      <small>{detalle}{merma ? ` · merma ${Math.round(merma * 100)} %` : ''}</small>
+                      <small>{detalle}{merma ? ` · merma ${Math.round(merma * 100)}%` : ''}</small>
                     </span>
                     <span className="paso-a-paso">
                       <button type="button" aria-label={`Menos ${nombre}`} onClick={() => setLinea(i, { cantidad: Math.max(paso(unidad), l.cantidad - paso(unidad)) })}><Minus size={15} /></button>
@@ -157,7 +157,7 @@ function EditorReceta({ id }: { id: string }) {
                   return (
                     <li key={x.insumoId}>
                       <span className="descuento-cant">−{cantidad(x.cantidad, i.unidad)}</span>
-                      <span>{i.nombre}{i.merma ? <small> (con {Math.round(i.merma * 100)} % de merma)</small> : null}</span>
+                      <span>{i.nombre}{i.merma ? <small> (con {Math.round(i.merma * 100)}% de merma)</small> : null}</span>
                       <span className={st - (sim ? x.cantidad : 0) < i.minimo ? 'mal' : 'tenue'}>{sim ? `quedarían ${cantidad(st - x.cantidad, i.unidad)}` : `quedan ${cantidad(st, i.unidad)}`}</span>
                     </li>
                   )
@@ -201,12 +201,12 @@ function EditorReceta({ id }: { id: string }) {
           </div>
           <Medidor valor={k.foodCost} objetivo={objetivo / 100} />
           <p className="ficha-costo-frase">
-            {!p.precio ? 'Poné el precio para ver cuánto deja.' : !k.costo ? 'Sin receta, todo lo que entra es ganancia.' : k.foodCost <= objetivo / 100 ? `Bien: el costo es el ${pct(k.foodCost)} del precio, menos que tu objetivo.` : `Ojo: el costo es el ${pct(k.foodCost)} del precio, más que tu objetivo del ${objetivo} %.`}
+            {!p.precio ? 'Poné el precio para ver cuánto deja.' : !k.costo ? 'Sin receta, todo lo que entra es ganancia.' : k.foodCost <= objetivo / 100 ? `Bien: el costo es el ${pct(k.foodCost)} del precio, menos que tu objetivo.` : `Ojo: el costo es el ${pct(k.foodCost)} del precio, más que tu objetivo del ${objetivo}%.`}
           </p>
           {k.costo > 0 && (
             <div className="sugerido">
               <label>
-                <span>Quiero que el costo sea el <strong>{objetivo} %</strong> del precio</span>
+                <span>Quiero que el costo sea el <strong>{objetivo}%</strong> del precio</span>
                 <input type="range" min={15} max={50} step={1} value={objetivo} onChange={(ev) => setObjetivo(Number(ev.target.value))} />
               </label>
               <div className="sugerido-fila">
@@ -285,7 +285,7 @@ function Agregar({ agregar, excluir }: { agregar: (l: LineaReceta) => void; excl
             if (ev.key === 'Escape') setAbierto(false)
             if (ev.key === 'Enter' && subs[0]) { ev.preventDefault(); elegir({ insumoId: subs[0].id, cantidad: subs[0].unidad === 'u' ? 1 : 100 }) }
           }}
-          placeholder="Sumar un subproducto: pan, medallón, fernet…"
+          placeholder="Sumar subproducto: pan, fernet…"
           aria-label="Sumar un subproducto"
         />
       </label>

@@ -107,7 +107,7 @@ export function Subproductos() {
                   <li key={x.id} className={`sub sub-${estado}`}>
                     <div className="sub-nombre">
                       <strong>{x.nombre}</strong>
-                      <small>{x.rubro} · {x.proveedor}{x.merma ? ` · merma ${Math.round(x.merma * 100)} %` : ''}</small>
+                      <small>{x.rubro} · {x.proveedor}{x.merma ? ` · merma ${Math.round(x.merma * 100)}%` : ''}</small>
                       {seVendeTalCual(e, x.id) && <span className="tal-cual">Se vende tal cual</span>}
                     </div>
                     <div className="sub-nivel">
@@ -271,7 +271,7 @@ function DialogoSubproducto({ inicial, cerrar }: { inicial: Insumo; cerrar: () =
           </label>
         </div>
         <label className="campo">
-          Merma: cuánto se pierde al prepararlo ({Math.round((x.merma ?? 0) * 100)} %)
+          Merma: cuánto se pierde al prepararlo ({Math.round((x.merma ?? 0) * 100)}%)
           <input type="range" min={0} max={40} value={Math.round((x.merma ?? 0) * 100)} onChange={(ev) => set({ merma: Number(ev.target.value) / 100 })} />
         </label>
         <p className="ayuda">Ej.: del lomo se limpia la grasa y se pierde un 12 %. Con la merma, el costo de cada receta y lo que se descuenta del stock son los reales.</p>

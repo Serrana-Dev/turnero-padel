@@ -74,6 +74,7 @@
   font-family: 'Barlow', system-ui, sans-serif;
   font-size: 16px;
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   box-shadow: 0 24px 64px rgb(13 35 71 / 0.25);
   overscroll-behavior: contain;
 }
@@ -911,5 +912,68 @@
 @media (prefers-reduced-motion: reduce) {
   .llave-marco {
     scroll-behavior: auto;
+  }
+}
+
+/* ——— Que se sienta una app en el celular (base de la skill mobile-native) ——— */
+html {
+  /* Sin el destello gris al tocar: cada botón ya tiene su propio :active */
+  -webkit-tap-highlight-color: transparent;
+  /* Sin agrandar la letra sola al poner el celular de costado */
+  -webkit-text-size-adjust: 100%;
+}
+/* Los controles responden al toque al instante y no seleccionan su texto al dejar el dedo apretado */
+button,
+[role='button'],
+[role='tab'],
+[role='radio'],
+.boton,
+.btn {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* Con menos de 16px el iPhone hace zoom al tocar el campo y no vuelve */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+/* Los diálogos scrollean solos: al llegar al final no arrastran la página de atrás */
+.dialogo {
+  overscroll-behavior: contain;
+}
+/* En pantallas táctiles el hover no se queda pegado después de tocar */
+@media (hover: none) {
+  .ficha-producto:hover,
+  .resumen-dato:hover,
+  .cal-dia:hover,
+  .proveedor:hover,
+  .competencia:hover {
+    transform: none !important;
+    box-shadow: none;
+  }
+  .producto-boton:hover {
+    background: var(--sheet, #fff);
+    border-color: var(--edge, #dde3eb);
+  }
+  .resumen-dato:hover:not(:disabled) {
+    border-color: var(--edge, #dde3eb);
+  }
+  .resumen-alerta:hover:not(:disabled) {
+    border-color: #0a1d42;
+  }
+}
+/* Con viewport-fit=cover la barra de arriba del panel se corre debajo del notch (en modo app instalada o de costado) */
+@media (max-width: 860px) {
+  .admin {
+    grid-template-rows: auto 1fr;
+  }
+  .superior {
+    padding-top: env(safe-area-inset-top, 0px);
+    min-height: calc(52px + env(safe-area-inset-top, 0px));
   }
 }

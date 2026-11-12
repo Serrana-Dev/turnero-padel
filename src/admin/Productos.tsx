@@ -72,7 +72,7 @@ export function Productos() {
       )}
 
       <div className="herramientas">
-        <Buscador valor={q} cambiar={setQ} texto="Buscar producto o lo que lleva: fernet, medallón…" />
+        <Buscador valor={q} cambiar={setQ} texto="Buscar producto o lo que lleva" />
         <div className="herramientas-derecha">
           <select className="select-chico" value={orden} onChange={(ev) => setOrden(ev.target.value as Orden)} aria-label="Ordenar">
             <option value="vendidos">Más vendidos</option>
@@ -129,7 +129,7 @@ export function Productos() {
                         <span className={`margen ${k.margen >= 0.65 ? 'margen-alto' : k.margen < 0.45 ? 'margen-bajo' : ''}`}>{pct(k.margen)} margen</span>
                       </>
                     ) : (
-                      <span className="margen margen-alto">100 % margen</span>
+                      <span className="margen margen-alto">100% margen</span>
                     )}
                     <span className={k.alcanza < 6 ? 'mal' : 'tenue'}>{!conReceta ? '' : k.alcanza === 0 ? 'Sin stock' : `Alcanza ${k.alcanza > 999 ? '+999' : k.alcanza}`}</span>
                     <span className="tenue">{v} vendidos</span>

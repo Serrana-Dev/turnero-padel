@@ -26,7 +26,7 @@ export function Competencias() {
           return (
             <li key={c.id}>
               <Link to={`/admin/torneos/${c.id}`} className="competencia">
-                <span className={`competencia-icono ${c.formato}`} aria-hidden="true">
+                <span className={`competencia-icono es-${c.formato}`} aria-hidden="true">
                   <Trophy size={18} />
                 </span>
                 <span className="competencia-texto">
@@ -35,7 +35,7 @@ export function Competencias() {
                     {capital(c.categoria)}, {c.formato === 'liga' ? 'liga' : 'torneo'} de {c.parejas.length} parejas
                   </small>
                 </span>
-                <span className="competencia-avance">
+                <span className="comp-avance">
                   <span className="competencia-barra">
                     <span style={{ width: `${(jugados / c.partidos.length) * 100}%` }} />
                   </span>

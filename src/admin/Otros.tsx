@@ -2,9 +2,10 @@ import { Cabecera, IconoProducto } from './comun'
 import { Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { negocio } from '../config/negocio'
-import { deClave, diaMes, hora, hoyClave, mesAño, pct, pesos, sumarDias } from '../lib/formato'
+import { deClave, diaMes, hora, hoyClave, pct, pesos, sumarDias } from '../lib/formato'
 import { aceptarSolicitud, costeo, darDeBajaFijo, insumoDe, metodos, movimientosCaja, ocupada, productoDe, rechazarSolicitud, useDatos, type Metodo } from '../lib/datos'
 
+const mesCorto = new Intl.DateTimeFormat('es-AR', { month: 'short', year: 'numeric' })
 const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 // ——— Turnos fijos ———
@@ -75,7 +76,8 @@ export function Fijos() {
                     <span className="fijo-hora">{hora(f.inicio)}</span>
                     <span className="fijo-texto">
                       <strong>{f.titular}</strong>
-                      <small>{negocio.canchas.find((c) => c.id === f.canchaId)!.nombre} · desde {mesAño(f.desde)} · {f.telefono}</small>
+                      <small>{negocio.canchas.find((c) => c.id === f.canchaId)!.nombre} · desde {mesCorto.format(deClave(f.desde)).replace('.', '')}</small>
+                      <small>{f.telefono}</small>
                     </span>
                     <button className="boton boton-chico" onClick={() => darDeBajaFijo(f.id)}>Dar de baja</button>
                   </li>

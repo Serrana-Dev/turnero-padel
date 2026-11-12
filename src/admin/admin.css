@@ -17,6 +17,7 @@
   grid-template-columns: 232px 1fr;
   grid-template-rows: 52px 1fr;
   height: 100vh;
+  height: 100dvh;
   background: var(--frame);
   color: var(--text);
   font-family: 'Barlow', system-ui, sans-serif;
@@ -1034,6 +1035,7 @@
   font-size: 15px;
   box-shadow: 0 24px 64px rgb(0 0 0 / 0.18);
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
 }
 .dialogo::backdrop {
   background: rgb(20 19 18 / 0.35);
@@ -1521,7 +1523,7 @@
   background: var(--text);
   color: #fff;
 }
-.competencia-icono.liga {
+.competencia-icono.es-liga {
   background: var(--chart-1);
 }
 .competencia-texto strong {
@@ -1529,11 +1531,11 @@
   font-size: 17px;
 }
 .competencia-texto small,
-.competencia-avance small {
+.comp-avance small {
   color: var(--muted);
   font-size: 14px;
 }
-.competencia-avance {
+.comp-avance {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1576,7 +1578,7 @@
   .competencia {
     grid-template-columns: auto 1fr;
   }
-  .competencia-avance,
+  .comp-avance,
   .competencia-estado {
     grid-column: 2;
   }

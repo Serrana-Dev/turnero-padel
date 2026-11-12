@@ -75,7 +75,7 @@ export function Historial() {
                 <button key={dia} className={`cal-dia cal-${t}`} onClick={() => setVer(dia)} aria-label={`${fechaLarga(dia)}: entró ${pesos(c.entro)}`}>
                   <span className="cal-num">{deClave(dia).getDate()}</span>
                   <span className="cal-barra"><i style={{ height: `${(c.entro / maxEntro) * 100}%` }} /></span>
-                  <span className="cal-monto">{Math.round(c.entro / 1000)}k</span>
+                  <span className="cal-monto">{c.entro >= 1e6 ? `${(c.entro / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })}M` : `${Math.round(c.entro / 1000)}k`}</span>
                 </button>
               )
             })}

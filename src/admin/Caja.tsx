@@ -106,7 +106,7 @@ export function Caja() {
         <section className="tarjeta">
           <div className="tarjeta-cabeza">
             <h2>Movimientos del día</h2>
-            <span className="tenue">Saldo del cajón a la derecha</span>
+            <span className="tenue">Lo último, arriba</span>
           </div>
           <div className="chips-filtro" role="group">
             {([['todo', 'Todo'], ['cancha', 'Canchas'], ['cantina', 'Cantina'], ['gasto', 'Gastos'], ['retiro', 'Retiros']] as [Filtro, string][]).map(([k, t]) => (
