@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useOutletContext, useSearchParams } from 'react-router-dom'
 import { BarChart3, CalendarRange, ChefHat, ChevronRight, Globe, History, Menu, Package, Receipt, Repeat, RotateCcw, ShoppingBag, Timer, Trophy, Truck, Wallet } from 'lucide-react'
 import { negocio } from '../config/negocio'
-import { ahoraMin, capital, diaMes, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
+import { ahoraMin, capital, diaMes, esHoraDemo, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
 import { actualizarReserva, aperturaDe, estados, reiniciar, repartoCuenta, resumenCaja, useDatos, type Reserva } from '../lib/datos'
 import { CuentaCobro, CuentaConsumos } from './Cuenta'
 import { bajoMinimo, Cabecera, IconoProducto } from './comun'
@@ -110,7 +110,7 @@ export function Layout() {
       <header className="superior">
         <button className="btn-icono solo-telefono" onClick={() => setAbierto(!abierto)} aria-label="Menú"><Menu size={20} /></button>
         <p className="superior-seccion">{seccionActual(lugar.pathname)}</p>
-        <p className="superior-texto">{capital(fechaLarga(hoyClave()))}<span className="superior-detalle">, abierto de 8:00 a 00:30</span></p>
+        <p className="superior-texto">{capital(fechaLarga(hoyClave()))}<span className="superior-detalle">{esHoraDemo() ? `, demo a las ${hora(ahoraMin())} (hora pico)` : ", abierto de 8:00 a 00:30"}</span></p>
         <Link to="/" className="boton boton-chico">Reservar como cliente</Link>
       </header>
       <main className="hoja-admin">
@@ -206,6 +206,12 @@ function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void 
   )
 }
 
+/** La cancha está paga pero quedaron consumos sin cobrar. */
+function debeConsumos(e: ReturnType<typeof useDatos>, reservaId: string) {
+  const c = e.cuentas.find((x) => x.reservaId === reservaId)
+  return !!c && !c.cerrada && c.consumos.length > 0
+}
+
 // ——— Canchas del día ———
 
 /** Lo primero que ve el dueño: cómo viene el día, en un vistazo, y cada dato lleva a su pantalla. */
@@ -297,8 +303,8 @@ function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
           const proxima = delDia.filter((r) => r.inicio > ahora).sort((a, b) => a.inicio - b.inicio)[0]
           const resto = actual ? actual.inicio + negocio.duracion - ahora : 0
           // El que terminó y todavía no pagó: la cancha y lo que consumieron se cobran al final
-          const aCobrar = delDia.filter((r) => r.inicio + negocio.duracion <= ahora && r.estado !== 'pagada').sort((a, b) => b.inicio - a.inicio)[0]
-          const ver = aCobrar ?? actual ?? proxima
+          const aCobrar = delDia.filter((r) => r.inicio + negocio.duracion <= ahora && (r.estado !== 'pagada' || debeConsumos(e, r.id))).sort((a, b) => b.inicio - a.inicio)[0]
+          const ver = actual ?? aCobrar ?? proxima
           return (
             <li key={c.id}>
               <button className="ahora-cancha" disabled={!ver} onClick={() => ver && verReserva(ver.id)}>
@@ -311,9 +317,6 @@ function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
                 {actual && repartoCuenta(e, actual.id).consumos > 0 && (
                   <span className="ahora-cuenta"><Receipt size={13} aria-hidden="true" /> {pesos(repartoCuenta(e, actual.id).consumos)} en la cantina</span>
                 )}
-                {aCobrar && (
-                  <span className="ahora-cobrar">Terminó {hora(aCobrar.inicio + negocio.duracion)} · cobrar {pesos(repartoCuenta(e, aCobrar.id).total - repartoCuenta(e, aCobrar.id).pagado)}</span>
-                )}
                 <span className="ahora-pie">
                   {actual
                     ? `Termina ${hora(actual.inicio + negocio.duracion)}, faltan ${resto} min`
@@ -322,6 +325,11 @@ function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
                       : 'Sin más reservas hoy'}
                 </span>
               </button>
+              {aCobrar && (
+                <button className="ahora-cobrar" onClick={() => verReserva(aCobrar.id)}>
+                  Terminó {hora(aCobrar.inicio + negocio.duracion)} · cobrar {pesos(repartoCuenta(e, aCobrar.id).total - repartoCuenta(e, aCobrar.id).pagado)}
+                </button>
+              )}
             </li>
           )
         })}
@@ -387,7 +395,7 @@ export function Canchas() {
     // Lo cobrado es lo mismo que dice la caja de ese día
     const cobrado = resumenCaja(e, dia).entro
     const paraCobrar = e.reservas
-      .filter((r) => r.dia === hoy && r.estado !== 'pagada' && r.estado !== 'cancelada' && r.inicio <= ahoraMin())
+      .filter((r) => r.dia === hoy && r.estado !== 'cancelada' && r.inicio <= ahoraMin() && (r.estado !== 'pagada' || debeConsumos(e, r.id)))
       .sort((a, b) => a.inicio - b.inicio)
     const sinSeña = e.reservas.filter((r) => r.estado === 'pendiente' && r.dia >= hoy).sort((a, b) => (a.dia + a.inicio).localeCompare(b.dia + b.inicio))
     const libresPico = negocio.canchas.length * negocio.turnos.filter((t) => t >= negocio.pico).length - delDia.filter((r) => r.inicio >= negocio.pico).length

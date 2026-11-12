@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 import type { Categoria } from '../config/negocio'
-import { agregarConsumo, ajustarCuenta, cobrarParte, cuantosJuegan, metodos, quitarConsumo, renombrarJugador, repartoCuenta, useDatos, type Metodo } from '../lib/datos'
+import { agregarConsumo, ajustarCuenta, cobrarParte, cuantosJuegan, metodos, quitarConsumo, reabrirCaja, renombrarJugador, repartoCuenta, useDatos, type Metodo } from '../lib/datos'
 import { hora, hoyClave, pesos } from '../lib/formato'
 import { negocio } from '../config/negocio'
 import { abrirWhatsApp, Buscador, categorias, coincide, IconoProducto, Vuelto } from './comun'
@@ -41,8 +41,16 @@ export function CuentaConsumos({ reservaId }: { reservaId: string }) {
   const [para, setPara] = useState<string | null>(null)
   const [cat, setCat] = useState<Categoria>('Bebidas')
   const [q, setQ] = useState('')
-  const cerrada = r.estado === 'pagada' && !!r.porCuenta
+  const [aviso, setAviso] = useState<{ texto: string; n: number } | null>(null)
+  const cerrada = !!c.cerrada || (r.estado === 'pagada' && !!r.porCuenta)
   const prod = (id: string) => e.productos.find((x) => x.id === id)
+  // Si se renombró al que estaba elegido, se vuelve a "Para todos"
+  const a = para && c.nombres.includes(para) ? para : null
+  const cargar = (itemId: string) => {
+    agregarConsumo(reservaId, itemId, a)
+    setAviso({ texto: `${prod(itemId)?.nombre} cargado ${a ? `a ${a}` : 'para todos'}`, n: (aviso?.n ?? 0) + 1 })
+  }
+  const cuantos = (itemId: string) => c.consumos.filter((x) => x.itemId === itemId).length
   const total = c.consumos.reduce((s, x) => s + (prod(x.itemId)?.precio ?? 0), 0)
 
   return (
@@ -54,8 +62,8 @@ export function CuentaConsumos({ reservaId }: { reservaId: string }) {
         <>
           <h3 className="cuenta-sub">Cargar a</h3>
           <div className="chips-filtro">
-            <button className={para === null ? 'activa' : ''} onClick={() => setPara(null)}>Para todos</button>
-            {c.nombres.map((n) => <button key={n} className={para === n ? 'activa' : ''} onClick={() => setPara(n)}>{n}</button>)}
+            <button className={a === null ? 'activa' : ''} onClick={() => setPara(null)}>Para todos</button>
+            {c.nombres.map((n) => <button key={n} className={a === n ? 'activa' : ''} onClick={() => setPara(n)}>{n}</button>)}
           </div>
           <Buscador valor={q} cambiar={setQ} texto="Buscar en la cantina" />
           {!q && (
@@ -63,11 +71,13 @@ export function CuentaConsumos({ reservaId }: { reservaId: string }) {
               {categorias.map((k) => <button key={k} className={cat === k ? 'activa' : ''} onClick={() => setCat(k)}>{k}</button>)}
             </div>
           )}
+          {aviso && <p className="aviso-carga" role="status" key={aviso.n}>{aviso.texto}. Se cobra al terminar.</p>}
           <div className="productos-grilla productos-chicos">
             {e.productos.filter((x) => !x.pausado && (q ? coincide(x.nombre, q) : x.categoria === cat)).map((it) => (
-              <button key={it.id} className="producto-boton" onClick={() => agregarConsumo(reservaId, it.id, para)}>
+              <button key={it.id} className="producto-boton" onClick={() => cargar(it.id)}>
                 <IconoProducto p={it} tam={30} icono={16} />
                 <span className="producto-boton-texto"><strong>{it.nombre}</strong><span>{pesos(it.precio)}</span></span>
+                {cuantos(it.id) > 0 && <span className="producto-cuenta">{cuantos(it.id)}</span>}
               </button>
             ))}
           </div>
@@ -105,7 +115,7 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
   const [metodo, setMetodo] = useState<Record<string, Metodo>>({})
   const [paga, setPaga] = useState<Record<string, number | null>>({})
   const [abierto, setAbierto] = useState<string | null>(null)
-  const cerrada = r.estado === 'pagada' && !!r.porCuenta
+  const cerrada = !!c.cerrada || (r.estado === 'pagada' && !!r.porCuenta)
   const cajaCerrada = e.cierres.some((x) => x.dia === hoyClave())
   const bloqueado = cerrada || c.pagos.length > 0
 
@@ -166,7 +176,11 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
           )
         })}
       </ul>
-      {cajaCerrada && !cerrada && <p className="aviso-linea">La caja de hoy ya se cerró: para cobrar, primero hay que volver a abrirla.</p>}
+      {cajaCerrada && !cerrada && (
+        <p className="aviso-linea">
+          La caja de hoy ya se cerró. <button className="enlace-boton" onClick={() => reabrirCaja(hoyClave())}>Reabrir la caja</button> para cobrar.
+        </p>
+      )}
       {cerrada && (
         <div className="cuenta-cerrada">
           <p className="aviso-ok">Pagaron todos: la cancha y lo consumido quedaron cobrados, y la cantina ya descontó el stock.</p>

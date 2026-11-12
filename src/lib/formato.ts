@@ -40,10 +40,15 @@ export const sumarDias = (k: string, n: number) => {
 }
 
 export const hoyClave = () => clave(new Date())
-export const ahoraMin = () => {
+/** Minuto real del día. */
+const minutoReal = () => {
   const d = new Date()
   return d.getHours() * 60 + d.getMinutes()
 }
+/** Fuera del horario del club (de 00:00 a 08:00) la demo hace de cuenta que son las 21:40, hora pico: siempre hay canchas jugándose. */
+export const HORA_DEMO = 1300
+export const esHoraDemo = () => minutoReal() < 480
+export const ahoraMin = () => (esHoraDemo() ? HORA_DEMO : minutoReal())
 
 const fLarga = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
 const fCorta = new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: 'numeric' })

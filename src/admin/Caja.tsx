@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Lock, LockOpen, Minus, Plus, Receipt, ShoppingBag } from 'lucide-react'
 import { negocio } from '../config/negocio'
-import { abrirCaja, anularVenta, aperturaDe, cerrarCaja, metodos, registrarGasto, registrarRetiro, resumenCaja, useDatos, type LineaCaja, type Metodo } from '../lib/datos'
+import { abrirCaja, anularVenta, aperturaDe, cerrarCaja, reabrirCaja, metodos, registrarGasto, registrarRetiro, resumenCaja, useDatos, type LineaCaja, type Metodo } from '../lib/datos'
 import { capital, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
 import { Dialogo } from '../lib/ui'
 import { abrirWhatsApp, Cabecera, Menos } from './comun'
@@ -85,6 +85,7 @@ export function Caja() {
         )}
         {sinAbrir && <button className="boton boton-chico boton-amarillo" onClick={() => setDialogo('abrir')}>Abrir caja</button>}
         {!r.cierre && !sinAbrir && !sinRegistro && <button className="boton boton-chico boton-primario" onClick={() => setDialogo('cierre')}>Cerrar caja</button>}
+        {r.cierre && esHoy && <button className="boton boton-chico" onClick={() => reabrirCaja(dia)}>Reabrir</button>}
         {r.cierre && <Link className="boton boton-chico" to="/admin/caja/historial">Ver historial</Link>}
       </div>
 

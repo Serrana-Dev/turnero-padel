@@ -47,7 +47,7 @@ export type Venta = {
 export type Consumo = { id: string; itemId: string; quien: string | null; hora: number }
 export type Pago = { nombre: string; monto: number; metodo: Metodo; hora: number }
 /** La cuenta abierta de un turno: quiénes juegan, qué consumieron y quién ya pagó. */
-export type Cuenta = { reservaId: string; nombres: string[]; consumos: Consumo[]; pagos: Pago[]; modo: 'partes' | 'persona'; partes: number }
+export type Cuenta = { reservaId: string; nombres: string[]; consumos: Consumo[]; pagos: Pago[]; modo: 'partes' | 'persona'; partes: number; cerrada?: boolean }
 export type MovStock = { id: string; dia: string; hora: number; insumoId: string; cantidad: number; motivo: 'venta' | 'compra' | 'ajuste' | 'merma'; detalle: string }
 export type Compra = { id: string; dia: string; proveedor: string; items: { insumoId: string; cantidad: number; costo: number }[]; total: number; metodo: Metodo }
 export type Gasto = { id: string; dia: string; hora: number; categoria: string; concepto: string; monto: number; metodo: Metodo; compraId?: string }
@@ -80,7 +80,7 @@ export type Estado = {
   insumos: Insumo[]
 }
 
-const VERSION = 10
+const VERSION = 11
 const CLAVE = 'tresmuros-demo'
 
 function azar(semilla: number) {
@@ -119,22 +119,25 @@ function generar(): Estado {
   for (let d = -62; d <= 10; d++) {
     const dia = sumarDias(hoy, d)
     const dow = deClave(dia).getDay()
-    for (const c of negocio.canchas) {
-      for (const inicio of negocio.turnos) {
+    // Todos los horarios tienen al menos un turno: así siempre hay una cancha jugándose y otra para cobrar
+    for (const inicio of negocio.turnos) {
+      let hay = 0
+      for (const [ci, c] of negocio.canchas.entries()) {
         const fijo = fijos.find((f) => f.dow === dow && f.inicio === inicio && f.canchaId === c.id)
-        // Ocupación: noches y fines de semana llenos, siesta vacía
+        // Ocupación: noches y fines de semana llenos, siesta más tranquila
         let p = inicio >= 1110 ? 0.82 : inicio >= 1020 ? 0.62 : inicio < 600 ? 0.3 : inicio >= 780 && inicio < 1000 ? 0.16 : 0.32
         if (dow === 0 || dow === 6) p = inicio >= 1380 ? 0.4 : 0.66
         if (!c.techada && inicio >= 840 && inicio < 1020 && dow !== 0 && dow !== 6) p *= 0.6
         if (d > 0) p *= Math.max(0.25, 1 - d * 0.09)
-        if (!fijo && r() > p) continue
+        const forzado = !hay && ci === negocio.canchas.length - 1 && d <= 3
+        if (!fijo && !forzado && r() > p) continue
         const pasada = d < 0 || (d === 0 && inicio + negocio.duracion <= ahora)
         const enCurso = d === 0 && inicio <= ahora && inicio + negocio.duracion > ahora
         let estado: EstadoReserva = 'señada'
-        // Los que terminaron hace menos de 45 minutos todavía están para cobrar: se cobra al final, la cancha y lo consumido
-        if (pasada) estado = r() < 0.04 ? 'cancelada' : d === 0 && inicio + negocio.duracion > ahora - 45 ? 'señada' : 'pagada'
+        // Los de hoy que terminaron hace menos de 90 minutos todavía están para cobrar: se cobra al final, la cancha y lo consumido
+        if (pasada) estado = !forzado && r() < 0.04 ? 'cancelada' : d === 0 && inicio + negocio.duracion > ahora - 90 ? 'señada' : 'pagada'
         else if (enCurso) estado = 'señada'
-        else if (!fijo && r() < 0.14) estado = 'pendiente'
+        else if (!fijo && !forzado && r() < 0.14) estado = 'pendiente'
         reservas.push({
           id: `r${++n}`,
           canchaId: c.id,
@@ -149,6 +152,7 @@ function generar(): Estado {
           fijoId: fijo?.id,
           metodo: estado === 'pagada' ? (r() < 0.5 ? 'efectivo' : 'transferencia') : undefined,
         })
+        if (estado !== 'cancelada') hay++
       }
     }
   }
@@ -259,7 +263,7 @@ function generar(): Estado {
 
   // Cuentas abiertas en las canchas que se están jugando o recién terminaron
   const cuentas: Cuenta[] = []
-  for (const res of reservas.filter((x) => x.dia === hoy && x.estado === 'señada' && x.inicio <= ahora && x.inicio + negocio.duracion + 45 > ahora)) {
+  for (const res of reservas.filter((x) => x.dia === hoy && x.estado === 'señada' && x.inicio <= ahora && x.inicio + negocio.duracion + 90 > ahora)) {
     const primero = res.titular.split(' ')[0]
     const nom = [primero, ...[...nombres].sort(() => r() - 0.5).filter((n) => n !== primero).slice(0, 3)]
     const consumos: Consumo[] = []
@@ -469,6 +473,8 @@ export function registrarMerma(insumoId: string, cantidad: number, motivo: strin
     movimientos: [...estado.movimientos, { id: `m${Date.now()}`, dia: hoyClave(), hora: ahoraMin(), insumoId, cantidad: -cantidad, motivo: 'merma', detalle: motivo }],
   })
 }
+/** Reabrir una caja cerrada (por si hay que cobrar algo más): se borra el cierre y se vuelve a contar después. */
+export const reabrirCaja = (dia: string) => guardar({ ...estado, cierres: estado.cierres.filter((c) => c.dia !== dia) })
 export const abrirCaja = (monto: number, cajero: string) =>
   guardar({ ...estado, aperturas: [...estado.aperturas.filter((a) => a.dia !== hoyClave()), { dia: hoyClave(), hora: ahoraMin(), monto, cajero }] })
 export function aperturaDe(e: Pick<Estado, 'aperturas'>, dia: string) {
@@ -563,7 +569,7 @@ export function repartoCuenta(e: Estado, reservaId: string) {
     ideal = Array.from({ length: n }, (_, i) => ({
       nombre: c.nombres[i],
       ideal: (base + (i < extra ? 1 : 0)) * 100 + (i === n - 1 ? resto : 0),
-      detalle: `1/${n} de la cancha y lo consumido`,
+      detalle: n === 1 ? 'Toda la cancha y lo consumido' : `1/${n} de la cancha y lo consumido`,
     }))
   } else {
     const gente = c.nombres.length ? c.nombres : ['Titular']
@@ -598,11 +604,14 @@ export function cobrarParte(reservaId: string, nombre: string, monto: number, me
     id: `v${Date.now()}${i}`, dia: hoyClave(), hora: x.hora, itemId: x.itemId, monto: productoDe(estado, x.itemId)?.precio ?? 0,
     metodo, cantidad: 1, reservaId, quien: x.quien ?? undefined,
   }))
+  // Si la cancha ya estaba paga de antes (se pagó al llegar), queda como estaba: esta cuenta era solo lo consumido
+  const r = estado.reservas.find((x) => x.id === reservaId)!
+  const yaPaga = r.estado === 'pagada' && !r.porCuenta
   guardar({
     ...estado,
-    cuentas: conCuenta(estado, nueva),
+    cuentas: conCuenta(estado, { ...nueva, cerrada: true }),
     ventas: [...estado.ventas, ...ventas],
-    reservas: estado.reservas.map((x) => (x.id === reservaId ? { ...x, estado: 'pagada' as const, porCuenta: true, metodo } : x)),
+    reservas: yaPaga ? estado.reservas : estado.reservas.map((x) => (x.id === reservaId ? { ...x, estado: 'pagada' as const, porCuenta: true, metodo } : x)),
   })
 }
 
@@ -734,7 +743,9 @@ export function resumenCaja(e: Estado, dia: string) {
   const retiros = lineas.filter((l) => l.tipo === 'retiro')
   const entro = ventas.reduce((s, l) => s + l.monto, 0)
   const salio = -salidas.reduce((s, l) => s + l.monto, 0) || 0
-  const canchas = ventas.filter((l) => l.tipo === 'cancha').reduce((s, l) => s + l.monto, 0)
+  // Lo que se consumió en las canchas se cobra junto con el turno, pero es plata de la cantina
+  const consumidoEnCanchas = e.ventas.filter((v) => v.dia === dia && v.reservaId && !v.anulada).reduce((s, v) => s + v.monto, 0)
+  const canchas = Math.max(0, ventas.filter((l) => l.tipo === 'cancha').reduce((s, l) => s + l.monto, 0) - consumidoEnCanchas)
   const esperado = efectivoEsperado(e, dia)
   const cierre = e.cierres.find((c) => c.dia === dia)
   return { lineas, ventas, salidas, retiros, entro, salio, canchas, cantina: entro - canchas, esperado, cierre, diferencia: cierre ? cierre.contado - esperado : null }

@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Check, ChevronUp, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { negocio, type Categoria } from '../config/negocio'
-import { agregarConsumo, costeo, cuentaDe, metodos, useDatos, venderTicket, type Metodo } from '../lib/datos'
+import { agregarConsumo, costeo, cuentaDe, metodos, reabrirCaja, useDatos, venderTicket, type Metodo } from '../lib/datos'
 import { ahoraMin, hora, hoyClave, pesos } from '../lib/formato'
 import { bajoMinimo, Buscador, Cabecera, categorias, Chips, coincide, colorDe, IconoProducto, tintaSobre, Vuelto } from './comun'
 import { resumenReceta } from './Productos'
@@ -76,7 +76,7 @@ export function Vender() {
     <div className="pantalla pantalla-vender">
       <Cabecera seccion="cantina" titulo="Vender" cuentas={{ '/admin/subproductos': bajoMinimo(e).length }} frase={<>Hoy van <strong>{pesos(totalHoy)}</strong> en {ventasHoy.length} {ventasHoy.length === 1 ? 'venta' : 'ventas'} del mostrador. Tocá los productos para armar el ticket.</>} />
 
-      {cajaCerrada && <p className="aviso-linea">La caja de hoy ya se cerró: se puede cargar a la cuenta de una cancha, pero para cobrar hay que abrirla de nuevo.</p>}
+      {cajaCerrada && <p className="aviso-linea">La caja de hoy ya se cerró: se puede cargar a la cuenta de una cancha, pero para cobrar hay que <button className="enlace-boton" onClick={() => reabrirCaja(hoy)}>reabrirla</button>.</p>}
       {hecho && <div className="toast" role="status" key={hecho}>{hecho}</div>}
       <div className="mostrador">
         <div className="mostrador-productos">
