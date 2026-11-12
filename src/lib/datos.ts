@@ -550,44 +550,69 @@ export function cuantosJuegan(reservaId: string, n: number) {
   guardar({ ...estado, cuentas: conCuenta(estado, { ...c, nombres, partes: nombres.length, consumos: c.consumos.map((x) => (x.quien && !nombres.includes(x.quien) ? { ...x, quien: null } : x)) }) })
 }
 
-/** Lo que tiene que pagar cada uno: el saldo de la cancha se divide entre todos; lo de cada uno, a su nombre. */
-export function repartoCuenta(e: Estado, reservaId: string) {
+/** Una línea del ticket de cada jugador: qué es y cuánto le toca. */
+export type LineaParte = { texto: string; monto: number; tipo: 'cancha' | 'suyo' | 'compartido' }
+
+export function repartoCuenta(e: Estado, reservaId: string, modo?: Cuenta['modo']) {
   const r = e.reservas.find((x) => x.id === reservaId)!
-  const c = cuentaDe(e, reservaId)
+  const c0 = cuentaDe(e, reservaId)
+  const c = modo ? { ...c0, modo } : c0
   const precioDeItem = (id: string) => productoDe(e, id)?.precio ?? 0
+  const nombreDe = (id: string) => productoDe(e, id)?.nombre ?? id
   const saldoCancha = r.estado === 'pagada' && !r.porCuenta ? 0 : r.precio - r.seña
   const consumos = c.consumos.reduce((s, x) => s + precioDeItem(x.itemId), 0)
   const total = saldoCancha + consumos
-  // Lo que le toca a cada uno: suma exacto el total (el redondeo a $100 se reparte, nadie queda en negativo)
-  let ideal: { nombre: string; ideal: number; detalle: string }[]
-  if (c.modo === 'partes') {
-    const n = Math.max(1, c.nombres.length)
-    const cientos = Math.floor(total / 100)
-    const resto = total - cientos * 100
-    const base = Math.floor(cientos / n)
-    const extra = cientos - base * n
-    ideal = Array.from({ length: n }, (_, i) => ({
-      nombre: c.nombres[i],
-      ideal: (base + (i < extra ? 1 : 0)) * 100 + (i === n - 1 ? resto : 0),
-      detalle: n === 1 ? 'Toda la cancha y lo consumido' : `1/${n} de la cancha y lo consumido`,
-    }))
-  } else {
-    const gente = c.nombres.length ? c.nombres : ['Titular']
-    const comun = c.consumos.filter((x) => !x.quien || !gente.includes(x.quien)).reduce((s, x) => s + precioDeItem(x.itemId), 0)
-    const porCabeza = (saldoCancha + comun) / gente.length
-    let acumulado = 0
-    ideal = gente.map((g, i) => {
-      const suyo = c.consumos.filter((x) => x.quien === g)
-      const crudo = porCabeza + suyo.reduce((s, x) => s + precioDeItem(x.itemId), 0)
-      const monto = i === gente.length - 1 ? total - acumulado : Math.round(crudo / 100) * 100
-      acumulado += monto
-      return { nombre: g, ideal: Math.max(0, monto), detalle: suyo.length ? `Su parte de la cancha + ${suyo.map((x) => productoDe(e, x.itemId)?.nombre).join(', ')}` : 'Su parte de la cancha' }
-    })
+  const gente = c.nombres.length ? c.nombres : ['Titular']
+  const n = gente.length
+  /** Agrupa consumos iguales: "2 × Agua 500 ml". */
+  const agrupar = (lista: Consumo[]) => {
+    const m = new Map<string, number>()
+    for (const x of lista) m.set(x.itemId, (m.get(x.itemId) ?? 0) + 1)
+    return [...m].map(([id, k]) => ({ id, k, nombre: nombreDe(id), precio: precioDeItem(id) }))
   }
+
+  // Lo que le toca a cada uno, línea por línea (sin redondear)
+  const compartidos = c.modo === 'partes' ? c.consumos : c.consumos.filter((k) => !k.quien || !gente.includes(k.quien))
+  const totalCompartido = compartidos.reduce((s, x) => s + precioDeItem(x.itemId), 0)
+  const listaCompartida = agrupar(compartidos).map((x) => `${x.k > 1 ? `${x.k} × ` : ''}${x.nombre}`).join(', ')
+  const crudas: LineaParte[][] = gente.map((g) => {
+    const lineas: LineaParte[] = []
+    if (saldoCancha) lineas.push({ texto: n === 1 ? 'La cancha' : `Su parte de la cancha (1/${n})`, monto: saldoCancha / n, tipo: 'cancha' })
+    if (c.modo === 'persona')
+      for (const x of agrupar(c.consumos.filter((k) => k.quien === g))) lineas.push({ texto: `${x.k > 1 ? `${x.k} × ` : ''}${x.nombre}`, monto: x.precio * x.k, tipo: 'suyo' })
+    if (totalCompartido)
+      lineas.push({
+        texto: c.modo === 'partes' ? `${n === 1 ? 'Lo consumido' : `Su parte de lo consumido (1/${n})`}: ${listaCompartida}` : `${n === 1 ? 'Lo de todos' : `Su parte de lo de todos (1/${n})`}: ${listaCompartida}`,
+        monto: totalCompartido / n,
+        tipo: 'compartido',
+      })
+    return lineas
+  })
+
+  // Se redondea a $100 repartiendo justo (cada uno queda redondeado para arriba o para abajo) y entre todos suman exacto el total
+  const crudos = crudas.map((l) => l.reduce((s, x) => s + x.monto, 0))
+  const pisos = crudos.map((x) => Math.floor(x / 100) * 100)
+  let sobra = total - pisos.reduce((s, x) => s + x, 0)
+  const extra = new Array(n).fill(0)
+  for (const i of crudos.map((_, i) => i).sort((a, b) => crudos[b] - pisos[b] - (crudos[a] - pisos[a]))) {
+    if (sobra < 100) break
+    extra[i] += 100
+    sobra -= 100
+  }
+  extra[n - 1] += sobra
+  const ideal = gente.map((g, i) => {
+    const crudo = crudos[i]
+    const monto = pisos[i] + extra[i]
+    const lineas = crudas[i].map((l) => ({ ...l, monto: Math.round(l.monto) }))
+    const suyo = lineas.filter((l) => l.tipo === 'suyo').map((l) => l.texto)
+    const detalle = c.modo === 'partes' ? (n === 1 ? 'Toda la cancha y lo consumido' : `1/${n} de la cancha y lo consumido`) : suyo.length ? `Su parte de la cancha + ${suyo.join(', ')}` : 'Su parte de la cancha'
+    return { nombre: g, ideal: Math.max(0, monto), lineas, detalle, redondeado: Math.abs(monto - crudo) >= 1 ? Math.round(crudo) : null }
+  })
+
   // Lo que ya pagó cada uno se descuenta: si se cargó algo después de que alguien pagó, le queda la diferencia
   const partes = ideal.map((x) => {
     const pagado = c.pagos.filter((p) => p.nombre === x.nombre).reduce((s, p) => s + p.monto, 0)
-    return { nombre: x.nombre, detalle: x.detalle, ideal: x.ideal, pagado, monto: Math.max(0, x.ideal - pagado) }
+    return { nombre: x.nombre, detalle: x.detalle, lineas: x.lineas, redondeado: x.redondeado, ideal: x.ideal, pagado, monto: Math.max(0, x.ideal - pagado) }
   })
   return { cuenta: c, saldoCancha, consumos, total, partes, pagado: c.pagos.reduce((s, p) => s + p.monto, 0) }
 }

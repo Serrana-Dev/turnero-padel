@@ -118,6 +118,11 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
   const cerrada = !!c.cerrada || (r.estado === 'pagada' && !!r.porCuenta)
   const cajaCerrada = e.cierres.some((x) => x.dia === hoyClave())
   const bloqueado = cerrada || c.pagos.length > 0
+  // Cómo quedaría con cada forma de dividir, para elegir viendo los números
+  const iguales = repartoCuenta(e, reservaId, 'partes').partes.map((p) => p.ideal)
+  const suyos = repartoCuenta(e, reservaId, 'persona').partes.map((p) => p.ideal)
+  const rango = (l: number[]) => (Math.min(...l) === Math.max(...l) ? `${pesos(l[0])} cada uno` : `de ${pesos(Math.min(...l))} a ${pesos(Math.max(...l))}`)
+  const haySuyos = c.consumos.some((x) => x.quien && c.nombres.includes(x.quien))
 
   if (rep.total === 0 && !cerrada) return <p className="ayuda cuenta-vacia">El turno ya está pagado y no consumieron nada. Si piden algo, cargalo en Consumos y se cobra acá.</p>
 
@@ -129,13 +134,19 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
         <div className="cuenta-resumen-total"><span>Total</span><strong>{pesos(rep.total)}</strong></div>
       </div>
 
-      <div className="segmentos segmentos-ancho">
-        <button className={c.modo === 'partes' ? 'activa' : ''} disabled={bloqueado} onClick={() => ajustarCuenta(reservaId, { modo: 'partes' })}>Partes iguales</button>
-        <button className={c.modo === 'persona' ? 'activa' : ''} disabled={bloqueado} onClick={() => ajustarCuenta(reservaId, { modo: 'persona' })}>Cada uno lo suyo</button>
+      <h3 className="cuenta-sub">Cómo pagan</h3>
+      <div className="modos-cobro" role="radiogroup" aria-label="Cómo pagan">
+        <button role="radio" aria-checked={c.modo === 'partes'} className={`modo-cobro ${c.modo === 'partes' ? 'activo' : ''}`} disabled={bloqueado && c.modo !== 'partes'} onClick={() => ajustarCuenta(reservaId, { modo: 'partes' })}>
+          <strong>Todos iguales</strong>
+          <span>La cancha y lo consumido, dividido en partes iguales.</span>
+          <em>{rango(iguales)}</em>
+        </button>
+        <button role="radio" aria-checked={c.modo === 'persona'} className={`modo-cobro ${c.modo === 'persona' ? 'activo' : ''}`} disabled={bloqueado && c.modo !== 'persona'} onClick={() => ajustarCuenta(reservaId, { modo: 'persona' })}>
+          <strong>Cada uno lo suyo</strong>
+          <span>La cancha se divide; cada uno paga lo que pidió{haySuyos ? '' : ' (cargá a nombre de cada uno en Consumos)'}.</span>
+          <em>{rango(suyos)}</em>
+        </button>
       </div>
-      <p className="ayuda">
-        {c.modo === 'partes' ? 'La cancha y todo lo consumido se divide igual entre los que pagan.' : 'La cancha y lo que es "para todos" se divide; lo que pidió cada uno lo paga él.'}
-      </p>
       {!bloqueado && (
         <div className="chips-filtro chips-partes">
           <span className="tenue">Pagan</span>
@@ -148,28 +159,51 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
         {rep.partes.map((p) => {
           const ultimo = [...c.pagos].reverse().find((x) => x.nombre === p.nombre)
           const pago = p.monto <= 0 ? ultimo ?? { metodo: 'efectivo' as Metodo, monto: 0 } : null
+          const m = metodo[p.nombre] ?? 'efectivo'
           return (
             <li key={p.nombre} className={pago ? 'parte-paga' : ''}>
-              <span className="jugador-avatar" aria-hidden="true">{pago ? <Check size={15} /> : p.nombre.startsWith('Jugador') ? p.nombre.slice(-1) : p.nombre[0]}</span>
-              <span className="parte-texto">
-                <strong>{p.nombre}</strong>
-                <small>{p.detalle}{p.pagado > 0 && p.monto > 0 ? ` · ya pagó ${pesos(p.pagado)}, le falta esto` : ''}</small>
-              </span>
-              <span className="parte-monto">{pesos(pago ? p.pagado : p.monto)}</span>
+              <div className="parte-cabeza">
+                <span className="jugador-avatar" aria-hidden="true">{pago ? <Check size={15} /> : p.nombre.startsWith('Jugador') ? p.nombre.slice(-1) : p.nombre[0]}</span>
+                <strong className="parte-nombre">{p.nombre}</strong>
+                <span className="parte-monto">{pesos(pago ? p.pagado : p.monto)}</span>
+              </div>
+              {/* El ticket de cada uno: qué está pagando, línea por línea */}
+              <ul className="parte-lineas">
+                {p.lineas.map((l, i) => (
+                  <li key={i} className={`linea-${l.tipo}`}>
+                    <span>{l.texto}</span>
+                    <span>{l.monto < 0 ? `−${pesos(-l.monto)}` : pesos(l.monto)}</span>
+                  </li>
+                ))}
+                <li className="linea-total">
+                  <span>Total{p.redondeado !== null && <small> (redondeado de {pesos(p.redondeado)})</small>}</span>
+                  <span>{pesos(p.ideal)}</span>
+                </li>
+                {p.pagado > 0 && p.monto > 0 && (
+                  <>
+                    <li className="linea-pagado"><span>Ya pagó</span><span>−{pesos(p.pagado)}</span></li>
+                    <li className="linea-total"><span>Le falta</span><span>{pesos(p.monto)}</span></li>
+                  </>
+                )}
+              </ul>
               {pago ? (
-                <span className="estado estado-pagada">{p.pagado > 0 ? `Pagó · ${metodos[pago.metodo]}` : 'No debe nada'}</span>
+                <span className="estado estado-pagada parte-estado">{p.pagado > 0 ? `Pagó ${pesos(p.pagado)} · ${metodos[pago.metodo]}` : 'No debe nada'}</span>
               ) : (
-                <span className="parte-cobro">
-                  <select aria-label={`Medio de pago de ${p.nombre}`} value={metodo[p.nombre] ?? 'efectivo'} onChange={(ev) => setMetodo({ ...metodo, [p.nombre]: ev.target.value as Metodo })}>
-                    {Object.entries(metodos).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                  {(metodo[p.nombre] ?? 'efectivo') === 'efectivo' && p.monto > 0 && (
+                <div className="parte-cobro">
+                  <div className="segmentos parte-metodo" role="radiogroup" aria-label={`Cómo paga ${p.nombre}`}>
+                    {(Object.keys(metodos) as Metodo[]).map((k) => (
+                      <button key={k} role="radio" aria-checked={m === k} className={m === k ? 'activa' : ''} onClick={() => { setMetodo({ ...metodo, [p.nombre]: k }); if (k !== 'efectivo') setAbierto(null) }}>{metodos[k]}</button>
+                    ))}
+                  </div>
+                  {m === 'efectivo' && p.monto > 0 && (
                     <button type="button" className={`boton boton-chico ${abierto === p.nombre ? 'activo' : ''}`} onClick={() => setAbierto(abierto === p.nombre ? null : p.nombre)}>Vuelto</button>
                   )}
-                  <button className="boton boton-chico boton-amarillo" disabled={cajaCerrada || p.monto <= 0 || (paga[p.nombre] != null && (paga[p.nombre] as number) < p.monto)} onClick={() => { cobrarParte(reservaId, p.nombre, p.monto, metodo[p.nombre] ?? 'efectivo'); setAbierto(null) }}>Cobrar</button>
-                </span>
+                  <button className="boton boton-chico boton-amarillo" disabled={cajaCerrada || p.monto <= 0 || (paga[p.nombre] != null && (paga[p.nombre] as number) < p.monto)} onClick={() => { cobrarParte(reservaId, p.nombre, p.monto, m); setAbierto(null) }}>
+                    Cobrar {pesos(p.monto)}
+                  </button>
+                </div>
               )}
-              {!pago && abierto === p.nombre && (metodo[p.nombre] ?? 'efectivo') === 'efectivo' && (
+              {!pago && abierto === p.nombre && m === 'efectivo' && (
                 <div className="parte-vuelto"><Vuelto total={p.monto} paga={paga[p.nombre] ?? null} cambiar={(n) => setPaga({ ...paga, [p.nombre]: n })} /></div>
               )}
             </li>
@@ -188,9 +222,8 @@ export function CuentaCobro({ reservaId }: { reservaId: string }) {
             className="boton boton-wsp"
             onClick={() => {
               const cancha = negocio.canchas.find((x) => x.id === r.canchaId)!.nombre
-              const lineas = rep.partes.map((p) => `• ${p.nombre}: ${pesos(p.pagado)}`).join('\n')
-              const consumido = c.consumos.map((x) => e.productos.find((k) => k.id === x.itemId)?.nombre).filter(Boolean).join(', ')
-              abrirWhatsApp(`${negocio.nombre} · ${cancha} ${hora(r.inicio)}\nCancha ${pesos(rep.saldoCancha)}${consumido ? ` + cantina ${pesos(rep.consumos)} (${consumido})` : ''}\nTotal ${pesos(rep.total)}\n${lineas}\n¡Gracias por venir!`)
+              const lineas = rep.partes.map((p) => `• ${p.nombre}: ${pesos(p.pagado)} (${p.lineas.map((l) => l.texto).join(', ')})`).join('\n')
+              abrirWhatsApp(`${negocio.nombre} · ${cancha} ${hora(r.inicio)}\nCancha ${pesos(rep.saldoCancha)} + cantina ${pesos(rep.consumos)} = ${pesos(rep.total)}\n${lineas}\n¡Gracias por venir!`)
             }}
           >
             Mandar el detalle por WhatsApp

@@ -3349,3 +3349,217 @@ div.resumen-dato:hover {
 @keyframes carga {
   from { opacity: 0; transform: translateY(-4px); }
 }
+
+/* ——— Cobro: elegir cómo pagan viendo los números, y el ticket de cada uno ——— */
+.modos-cobro {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.modo-cobro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--control, #d3dbe6);
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  color: var(--text, #0d2347);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms;
+}
+.modo-cobro strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+.modo-cobro span {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted, #536077);
+}
+.modo-cobro em {
+  margin-top: auto;
+  padding-top: 6px;
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.modo-cobro.activo {
+  border-color: #0a1d42;
+  background: #0a1d42;
+  color: #fff;
+}
+.modo-cobro.activo span {
+  color: #b9c6e0;
+}
+.modo-cobro.activo em {
+  color: #e2f24b;
+}
+.modo-cobro:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.partes > li {
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px !important;
+}
+.parte-cabeza {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.parte-nombre {
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parte-cabeza .parte-monto {
+  font-size: 20px;
+  font-weight: 800;
+}
+.parte-lineas {
+  list-style: none;
+  margin: 0 0 0 42px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--soft, #f4f6fa);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.parte-lineas li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+}
+.parte-lineas li span:first-child {
+  min-width: 0;
+}
+.parte-lineas li span:last-child {
+  flex: none;
+  font-weight: 600;
+}
+.linea-cancha span:first-child::before,
+.linea-suyo span:first-child::before,
+.linea-compartido span:first-child::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 2px;
+  vertical-align: 1px;
+}
+.linea-cancha span:first-child::before { background: #0a1d42; }
+.linea-suyo span:first-child::before { background: #e2b400; }
+.linea-compartido span:first-child::before { background: #2f6fd6; }
+.linea-redondeo,
+.linea-pagado {
+  color: var(--muted, #536077);
+}
+.linea-pagado span:last-child {
+  color: var(--ok, #12804a);
+}
+.parte-paga .parte-lineas {
+  opacity: 0.65;
+}
+.parte-estado {
+  align-self: flex-start;
+  margin-left: 42px;
+}
+.parte-cobro {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-left: 42px;
+}
+.parte-metodo {
+  flex: 1 1 200px;
+}
+.parte-metodo button {
+  flex: 1;
+}
+.parte-cobro .boton-amarillo {
+  min-width: 130px;
+}
+.parte-vuelto {
+  margin-left: 42px;
+}
+@media (max-width: 860px) {
+  .modos-cobro {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .modo-cobro {
+    padding: 10px 12px;
+  }
+  .modo-cobro strong {
+    font-size: 15px;
+  }
+  .parte-lineas,
+  .parte-cobro,
+  .parte-estado,
+  .parte-vuelto {
+    margin-left: 0;
+  }
+  .parte-cobro .boton-amarillo {
+    flex: 1 1 100%;
+    height: 46px;
+    font-size: 16px;
+  }
+  .parte-metodo button {
+    min-height: 42px;
+  }
+}
+
+.parte-lineas .linea-total {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--control, #d3dbe6);
+  font-weight: 800;
+}
+.parte-lineas .linea-total small {
+  font-weight: 500;
+  color: var(--muted, #536077);
+}
+.linea-compartido span:first-child,
+.linea-suyo span:first-child {
+  overflow-wrap: anywhere;
+}
+
+/* El ticket de cada uno: renglones limpios, sin el estilo de tarjeta de las filas */
+.partes > li {
+  align-items: stretch !important;
+}
+.partes .parte-lineas li {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: baseline;
+  grid-template-columns: none !important;
+  gap: 12px;
+  padding: 3px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+}
+.partes .parte-lineas li.linea-total {
+  margin-top: 4px;
+  padding-top: 7px !important;
+  border-top: 1px dashed #c3cddb !important;
+}
+.parte-lineas li > span:first-child {
+  padding-left: 15px;
+  text-indent: -15px;
+}
+.parte-lineas li.linea-total > span:first-child,
+.parte-lineas li.linea-pagado > span:first-child {
+  padding-left: 0;
+  text-indent: 0;
+}
