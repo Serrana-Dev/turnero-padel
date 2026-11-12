@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useOutletContext, useSearchParams } from 'react-router-dom'
-import { BarChart3, CalendarRange, ChefHat, Globe, History, Menu, Package, Receipt, Repeat, RotateCcw, ShoppingBag, Trophy, Truck, Wallet } from 'lucide-react'
+import { BarChart3, CalendarRange, ChefHat, ChevronRight, Globe, History, Menu, Package, Receipt, Repeat, RotateCcw, ShoppingBag, Timer, Trophy, Truck, Wallet } from 'lucide-react'
 import { negocio } from '../config/negocio'
 import { ahoraMin, capital, diaMes, fechaCorta, fechaLarga, hora, hoyClave, pesos, sumarDias } from '../lib/formato'
-import { actualizarReserva, estados, reiniciar, repartoCuenta, resumenCaja, useDatos, type Reserva } from '../lib/datos'
+import { actualizarReserva, aperturaDe, estados, reiniciar, repartoCuenta, resumenCaja, useDatos, type Reserva } from '../lib/datos'
 import { CuentaCobro, CuentaConsumos } from './Cuenta'
-import { bajoMinimo, Cabecera } from './comun'
+import { bajoMinimo, Cabecera, IconoProducto } from './comun'
 import { Dialogo } from '../lib/ui'
 import { CanchaDibujo } from '../lib/cancha'
 
@@ -208,6 +208,80 @@ function DetalleReserva({ id, cerrar }: { id: string | null; cerrar: () => void 
 
 // ——— Canchas del día ———
 
+/** Lo primero que ve el dueño: cómo viene el día, en un vistazo, y cada dato lleva a su pantalla. */
+function ResumenDia({ ocupacion, libresPico, paraCobrar, verReserva }: { ocupacion: number; libresPico: number; paraCobrar: Reserva[]; verReserva: (id: string) => void }) {
+  const e = useDatos()
+  const hoy = hoyClave()
+  const ahora = ahoraMin()
+  const r = resumenCaja(e, hoy)
+  const ap = aperturaDe(e, hoy)
+  const saludo = ahora < 780 ? 'Buen día' : ahora < 1200 ? 'Buenas tardes' : 'Buenas noches'
+  // Lo más vendido hoy (sin anuladas ni invitaciones)
+  const cuenta = new Map<string, number>()
+  for (const v of e.ventas) if (v.dia === hoy && !v.anulada && !v.cortesia) cuenta.set(v.itemId, (cuenta.get(v.itemId) ?? 0) + (v.cantidad ?? 1))
+  const [topId, topN] = [...cuenta].sort((a, b) => b[1] - a[1])[0] ?? [null, 0]
+  const top = topId ? e.productos.find((x) => x.id === topId) : null
+  const faltan = bajoMinimo(e)
+  const aCobrar = paraCobrar.reduce((s, x) => { const k = repartoCuenta(e, x.id); return s + k.total - k.pagado }, 0)
+  const pctCanchas = r.entro ? r.canchas / r.entro : 0
+  const R = 22
+  const largo = 2 * Math.PI * R
+  return (
+    <section className="resumen-dia" aria-label="Resumen del día">
+      <Link to="/admin/caja" className="resumen-plata">
+        <span className="resumen-saludo">{saludo}. Así viene el día</span>
+        <strong className="resumen-total">{pesos(r.entro)}</strong>
+        <span className="resumen-barra" aria-hidden="true"><i style={{ width: `${pctCanchas * 100}%` }} /></span>
+        <span className="resumen-partes">
+          <span><i className="punto punto-canchas" /> Canchas {pesos(r.canchas)}</span>
+          <span><i className="punto punto-cantina" /> Cantina {pesos(r.cantina)}</span>
+        </span>
+        <span className="resumen-caja">
+          {r.cierre ? `Caja cerrada por ${r.cierre.cajero}` : ap ? `Caja abierta por ${ap.cajero} desde las ${hora(ap.hora)}` : 'La caja todavía no se abrió'} · en el cajón {pesos(r.cierre ? r.cierre.contado : r.esperado)}
+          <ChevronRight size={16} aria-hidden="true" />
+        </span>
+      </Link>
+      <div className="resumen-datos">
+        <div className="resumen-dato">
+          <svg className="resumen-anillo" viewBox="0 0 56 56" aria-hidden="true">
+            <circle cx="28" cy="28" r={R} />
+            <circle cx="28" cy="28" r={R} className="anillo-lleno" strokeDasharray={`${largo * ocupacion} ${largo}`} />
+          </svg>
+          <span>
+            <small>Canchas ocupadas</small>
+            <strong>{Math.round(ocupacion * 100)}%</strong>
+            <em>{libresPico === 0 ? 'Pico completo' : `${libresPico} libres en horario pico`}</em>
+          </span>
+        </div>
+        <button className={`resumen-dato ${paraCobrar.length ? 'resumen-alerta' : ''}`} disabled={!paraCobrar.length} onClick={() => paraCobrar[0] && verReserva(paraCobrar[0].id)}>
+          <Timer size={22} aria-hidden="true" />
+          <span>
+            <small>Para cobrar</small>
+            <strong>{paraCobrar.length ? pesos(aCobrar) : 'Nada'}</strong>
+            <em>{paraCobrar.length ? `${paraCobrar.length} ${paraCobrar.length === 1 ? 'turno jugando o terminado' : 'turnos jugando o terminados'}` : 'Todo cobrado'}</em>
+          </span>
+        </button>
+        <Link to="/admin/productos" className="resumen-dato">
+          {top ? <IconoProducto p={top} tam={40} icono={20} /> : <ShoppingBag size={22} aria-hidden="true" />}
+          <span>
+            <small>Lo más vendido hoy</small>
+            <strong>{top ? top.nombre : 'Todavía nada'}</strong>
+            <em>{top ? `${topN} ${topN === 1 ? 'vendido' : 'vendidos'}` : 'El mostrador arranca con el día'}</em>
+          </span>
+        </Link>
+        <Link to="/admin/subproductos" className={`resumen-dato ${faltan.length ? 'resumen-alerta-suave' : ''}`}>
+          <Package size={22} aria-hidden="true" />
+          <span>
+            <small>Stock</small>
+            <strong>{faltan.length ? `${faltan.length} para reponer` : 'Todo en orden'}</strong>
+            <em>{faltan.length ? faltan.slice(0, 2).map((x) => x.nombre.split(' ')[0].toLowerCase()).join(', ') + (faltan.length > 2 ? ' y más' : '') : 'Nada bajo el mínimo'}</em>
+          </span>
+        </Link>
+      </div>
+    </section>
+  )
+}
+
 /** Las cuatro canchas como se ven desde la cantina: quién juega ahora y cuándo se libera. */
 function AhoraEnCanchas({ verReserva }: { verReserva: (id: string) => void }) {
   const e = useDatos()
@@ -339,12 +413,16 @@ export function Canchas() {
         </div>
       </Cabecera>
 
-      <div className="kpis">
-        <div className="kpi"><span>Ocupación</span><strong>{Math.round(d.ocupacion * 100)}%</strong><small>{d.libresPico} turnos libres en horario pico</small></div>
-        <div className="kpi"><span>Cobrado</span><strong>{pesos(d.cobrado)}</strong><small>señas, saldos y cantina del día</small></div>
-        <div className="kpi"><span>Por cobrar</span><strong>{pesos(d.aCobrar)}</strong><small>saldos de las reservas del día</small></div>
-        <div className="kpi"><span>Sin seña</span><strong className={d.sinSeña.length ? 'mal' : ''}>{d.sinSeña.length}</strong><small>reservas de hoy en adelante</small></div>
-      </div>
+      {dia === hoy ? (
+        <ResumenDia ocupacion={d.ocupacion} libresPico={d.libresPico} paraCobrar={d.paraCobrar} verReserva={verReserva} />
+      ) : (
+        <div className="kpis">
+          <div className="kpi"><span>Ocupación</span><strong>{Math.round(d.ocupacion * 100)}%</strong><small>{d.libresPico} turnos libres en horario pico</small></div>
+          <div className="kpi"><span>Cobrado</span><strong>{pesos(d.cobrado)}</strong><small>señas, saldos y cantina del día</small></div>
+          <div className="kpi"><span>Por cobrar</span><strong>{pesos(d.aCobrar)}</strong><small>saldos de las reservas del día</small></div>
+          <div className="kpi"><span>Sin seña</span><strong className={d.sinSeña.length ? 'mal' : ''}>{d.sinSeña.length}</strong><small>reservas de hoy en adelante</small></div>
+        </div>
+      )}
 
       {dia === hoy && <AhoraEnCanchas verReserva={verReserva} />}
 
