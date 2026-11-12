@@ -95,6 +95,7 @@ export function Fijos() {
 
 export function Reportes() {
   const e = useDatos()
+  const [sel, setSel] = useState<{ dow: number; i: number } | null>(null)
   const hoy = hoyClave()
   const desde = sumarDias(hoy, -27)
 
@@ -122,7 +123,8 @@ export function Reportes() {
     const cantina = e.ventas.filter((v) => v.dia >= desde && !v.anulada).reduce((s, v) => s + v.monto, 0)
     const origen = (['web', 'whatsapp', 'fijo'] as const).map((o) => ({ o, n: periodo.filter((x) => x.origen === o).length }))
     const siesta = calor.flatMap((f) => f.celdas.slice(3, 6))
-    return { periodo, calor, porCancha, ingresos, ingresosAntes, cantina, origen, siesta: siesta.reduce((a, b) => a + b, 0) / siesta.length }
+    const fechasDe = (dow: number) => Array.from({ length: 28 }, (_, i) => sumarDias(desde, i)).filter((d) => deClave(d).getDay() === dow)
+    return { periodo, calor, porCancha, ingresos, ingresosAntes, cantina, origen, fechasDe, siesta: siesta.reduce((a, b) => a + b, 0) / siesta.length }
   }, [e, desde, hoy])
 
   const cambio = r.ingresosAntes ? (r.ingresos - r.ingresosAntes) / r.ingresosAntes : 0
@@ -135,7 +137,7 @@ export function Reportes() {
         <button className="boton boton-primario" onClick={() => descargarExcel(e, desde, hoy)}><Download size={16} aria-hidden="true" /> Descargar Excel</button>
       </Cabecera>
       <div className="kpis">
-        <div className="kpi"><span>Facturado en canchas</span><strong>{pesos(r.ingresos)}</strong><small className={cambio >= 0 ? 'bien' : 'mal'}>{cambio >= 0 ? '+' : '−'}{pct(Math.abs(cambio))} contra las 4 semanas anteriores</small></div>
+        <div className="kpi"><span>Facturado en canchas</span><strong>{pesos(r.ingresos)}</strong><small className={Math.abs(cambio) < 0.005 ? '' : cambio > 0 ? 'bien' : 'mal'}>{Math.abs(cambio) < 0.005 ? 'Igual que las 4 semanas anteriores' : `${cambio > 0 ? '+' : '−'}${pct(Math.abs(cambio))} contra las 4 semanas anteriores`}</small></div>
         <div className="kpi"><span>Ocupación</span><strong>{pct(ocupacion)}</strong><small>{r.periodo.length} turnos jugados o reservados</small></div>
         <div className="kpi"><span>Cantina</span><strong>{pesos(r.cantina)}</strong><small>{pct(r.cantina / (r.ingresos + r.cantina))} de lo facturado</small></div>
         <div className="kpi"><span>Siesta (12:30 a 17:00)</span><strong className="mal">{pct(r.siesta)}</strong><small>ocupación: horario para promocionar</small></div>
@@ -152,14 +154,30 @@ export function Reportes() {
           {r.calor.map((f) => (
             <div key={f.dow} className="calor-fila">
               <span className="calor-dia">{dias[f.dow].slice(0, 3)}</span>
-              {f.celdas.map((v, i) => (
-                <span key={i} className={`calor-celda ${v >= 0.55 ? 'calor-oscura' : ''}`} style={{ ['--v' as string]: v }} title={`${dias[f.dow]} ${hora(negocio.turnos[i])}: ${pct(v)}`}>
-                  {Math.round(v * 100)}
-                </span>
-              ))}
+              {f.celdas.map((v, i) => {
+                const elegida = sel?.dow === f.dow && sel.i === i
+                const total = r.fechasDe(f.dow).length * negocio.canchas.length
+                return (
+                  <button
+                    key={i}
+                    className={`calor-celda ${v >= 0.55 ? 'calor-oscura' : ''} ${elegida ? 'calor-elegida' : ''}`}
+                    style={{ ['--v' as string]: v }}
+                    onClick={() => setSel(elegida ? null : { dow: f.dow, i })}
+                    aria-label={`${dias[f.dow]} ${hora(negocio.turnos[i])}: ${pct(v)} ocupado. Ver detalle`}
+                  >
+                    {Math.round(v * 100)}
+                    <span className="calor-tip" role="tooltip">
+                      <strong>{dias[f.dow]} {hora(negocio.turnos[i])}</strong>
+                      {pct(v)} ocupado · {Math.round(v * total)} de {total} turnos
+                      <em>Tocá para ver el detalle</em>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           ))}
         </div>
+        {sel ? <DetalleHorario dow={sel.dow} inicio={negocio.turnos[sel.i]} desde={desde} hoy={hoy} cerrar={() => setSel(null)} /> : <p className="ayuda calor-pista">Pasá el mouse o tocá un cuadro para ver el detalle de ese horario.</p>}
       </section>
 
       <div className="grilla-2">
@@ -191,6 +209,65 @@ export function Reportes() {
       </div>
       <ReporteCantina desde={desde} hoy={hoy} />
     </div>
+  )
+}
+
+/** El detalle de un horario del mapa: cuánto se llena, cuánto deja, quién reserva y qué hacer. */
+function DetalleHorario({ dow, inicio, desde, hoy, cerrar }: { dow: number; inicio: number; desde: string; hoy: string; cerrar: () => void }) {
+  const e = useDatos()
+  const fechas = Array.from({ length: 28 }, (_, i) => sumarDias(desde, i)).filter((d) => deClave(d).getDay() === dow && d <= hoy)
+  const delHorario = e.reservas.filter((x) => x.inicio === inicio && fechas.includes(x.dia) && x.estado !== 'cancelada')
+  const capacidad = fechas.length * negocio.canchas.length
+  const ocupacion = capacidad ? delHorario.length / capacidad : 0
+  const facturado = delHorario.reduce((s, x) => s + x.precio, 0)
+  const cantina = e.ventas.filter((v) => fechas.includes(v.dia) && v.hora >= inicio && v.hora < inicio + negocio.duracion && !v.anulada).reduce((s, v) => s + v.monto, 0)
+  const porCancha = negocio.canchas.map((c) => ({ c, n: delHorario.filter((x) => x.canchaId === c.id).length }))
+  const maxC = Math.max(...porCancha.map((x) => x.n), 1)
+  const origen = (['web', 'whatsapp', 'fijo'] as const).map((o) => ({ o, n: delHorario.filter((x) => x.origen === o).length }))
+  // Los que más vienen a esa hora
+  const veces = new Map<string, number>()
+  for (const x of delHorario) veces.set(x.titular, (veces.get(x.titular) ?? 0) + 1)
+  const fieles = [...veces].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 3)
+  const consejo =
+    ocupacion >= 0.85 ? 'Se llena casi siempre: podés subir un poco la tarifa o abrir lista de espera.'
+    : ocupacion >= 0.55 ? 'Buen horario: conviene ofrecerlo como turno fijo a los que vienen seguido.'
+    : ocupacion >= 0.3 ? 'Horario a medias: una promo por WhatsApp a los clientes de siempre lo puede llenar.'
+    : 'Horario flojo: probá una tarifa más baja, clases o un americano para ocupar las canchas.'
+  return (
+    <section className="detalle-horario" aria-label="Detalle del horario">
+      <header>
+        <div>
+          <h3>{dias[dow]} a las {hora(inicio)}</h3>
+          <p>Últimas 4 semanas · {fechas.length} {fechas.length === 1 ? 'día' : 'días'}</p>
+        </div>
+        <button className="btn-icono" onClick={cerrar} aria-label="Cerrar el detalle">×</button>
+      </header>
+      <div className="detalle-numeros">
+        <div className="detalle-grande"><span>Ocupación</span><strong>{pct(ocupacion)}</strong><small>{delHorario.length} de {capacidad} turnos</small></div>
+        <div><span>Facturado en canchas</span><strong>{pesos(facturado)}</strong><small>{pesos(fechas.length ? facturado / fechas.length : 0)} por día</small></div>
+        <div><span>Cantina en ese horario</span><strong>{pesos(cantina)}</strong><small>lo que se vendió mientras jugaban</small></div>
+      </div>
+      <div className="detalle-cols">
+        <div>
+          <h4>La cancha más pedida</h4>
+          <ul className="detalle-barras">
+            {porCancha.map((x) => (
+              <li key={x.c.id}><span>{x.c.nombre}</span><i><b style={{ width: `${(x.n / maxC) * 100}%` }} /></i><strong>{x.n}</strong></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4>Cómo reservaron</h4>
+          <ul className="detalle-barras">
+            {origen.map((x) => (
+              <li key={x.o}><span>{x.o === 'web' ? 'Web' : x.o === 'whatsapp' ? 'WhatsApp' : 'Turno fijo'}</span><i><b style={{ width: `${delHorario.length ? (x.n / delHorario.length) * 100 : 0}%` }} /></i><strong>{x.n}</strong></li>
+            ))}
+          </ul>
+          {fieles.length > 0 && <p className="detalle-fieles">Vienen seguido: {fieles.map(([n, k]) => `${n.split(' ')[0]} (${k})`).join(', ')}</p>}
+        </div>
+      </div>
+      <p className="detalle-consejo">{consejo}</p>
+    </section>
   )
 }
 

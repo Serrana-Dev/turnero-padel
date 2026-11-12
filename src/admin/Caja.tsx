@@ -293,7 +293,11 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
   const [monedas, setMonedas] = useState('')
   const [ver, setVer] = useState(false)
   const [cajero, setCajero] = useState(negocio.cajeros[0])
-  const contado = billetes.reduce((s, b) => s + b * (cant[b] ?? 0), 0) + (Number(monedas) || 0)
+  // Se puede contar billete por billete o poner directamente el total que hay en el cajón
+  const [forma, setForma] = useState<'total' | 'billetes'>('total')
+  const [total, setTotal] = useState('')
+  const contadoBilletes = billetes.reduce((s, b) => s + b * (cant[b] ?? 0), 0) + (Number(monedas) || 0)
+  const contado = forma === 'total' ? Number(total.replace(/\D/g, '')) || 0 : contadoBilletes
   const dif = contado - r.esperado
   const efe = r.lineas.filter((l) => l.metodo === 'efectivo')
   const set = (b: number, n: number) => setCant({ ...cant, [b]: Math.max(0, n) })
@@ -301,29 +305,42 @@ function DialogoCierre({ dia, cerrar }: { dia: string; cerrar: () => void }) {
     <Dialogo abierto cerrar={cerrar} titulo="Cerrar caja" ancho={560}>
       {!ver ? (
         <>
-          <p className="ayuda">Contá los billetes del cajón. El sistema no te dice cuánto tendría que haber hasta que termines, así el conteo es honesto.</p>
-          <ul className="billetes">
-            {billetes.map((b) => (
-              <li key={b}>
-                <span className={`billete billete-${b}`}><Banknote size={16} aria-hidden="true" /> {pesos(b)}</span>
-                <span className="paso-a-paso">
-                  <button type="button" aria-label={`Un billete menos de ${b}`} onClick={() => set(b, (cant[b] ?? 0) - 1)}><Minus size={15} /></button>
-                  <input type="number" inputMode="numeric" min={0} value={cant[b] ?? 0} onChange={(ev) => set(b, Number(ev.target.value))} aria-label={`Billetes de ${b}`} />
-                  <button type="button" aria-label={`Un billete más de ${b}`} onClick={() => set(b, (cant[b] ?? 0) + 1)}><Plus size={15} /></button>
-                </span>
-                <strong>{pesos(b * (cant[b] ?? 0))}</strong>
+          <p className="ayuda">Contá el efectivo del cajón. El sistema no te dice cuánto tendría que haber hasta que termines, así el conteo es honesto.</p>
+          <div className="segmentos segmentos-ancho" role="radiogroup" aria-label="Cómo contás">
+            <button type="button" role="radio" aria-checked={forma === 'total'} className={forma === 'total' ? 'activa' : ''} onClick={() => setForma('total')}>Pongo el total</button>
+            <button type="button" role="radio" aria-checked={forma === 'billetes'} className={forma === 'billetes' ? 'activa' : ''} onClick={() => setForma('billetes')}>Cuento billete por billete</button>
+          </div>
+          {forma === 'total' ? (
+            <label className="campo campo-total">
+              Cuánto efectivo hay en el cajón
+              <span className="con-signo con-signo-claro">
+                $<input type="text" inputMode="numeric" autoFocus value={total ? (Number(total.replace(/\D/g, '')) || 0).toLocaleString('es-AR') : ''} onChange={(ev) => setTotal(ev.target.value.replace(/\D/g, ''))} placeholder="0" aria-label="Total contado" />
+              </span>
+            </label>
+          ) : (
+            <ul className="billetes">
+              {billetes.map((b) => (
+                <li key={b}>
+                  <span className={`billete billete-${b}`}><Banknote size={16} aria-hidden="true" /> {pesos(b)}</span>
+                  <span className="paso-a-paso">
+                    <button type="button" aria-label={`Un billete menos de ${b}`} onClick={() => set(b, (cant[b] ?? 0) - 1)}><Minus size={15} /></button>
+                    <input type="number" inputMode="numeric" min={0} value={cant[b] ?? 0} onChange={(ev) => set(b, Number(ev.target.value))} aria-label={`Billetes de ${b}`} />
+                    <button type="button" aria-label={`Un billete más de ${b}`} onClick={() => set(b, (cant[b] ?? 0) + 1)}><Plus size={15} /></button>
+                  </span>
+                  <strong>{pesos(b * (cant[b] ?? 0))}</strong>
+                </li>
+              ))}
+              <li>
+                <span className="billete">Monedas y sueltos</span>
+                <input className="input-monedas" type="number" inputMode="numeric" min={0} value={monedas} onChange={(ev) => setMonedas(ev.target.value)} aria-label="Monedas" placeholder="0" />
+                <strong>{pesos(Number(monedas) || 0)}</strong>
               </li>
-            ))}
-            <li>
-              <span className="billete">Monedas y sueltos</span>
-              <input className="input-monedas" type="number" inputMode="numeric" min={0} value={monedas} onChange={(ev) => setMonedas(ev.target.value)} aria-label="Monedas" placeholder="0" />
-              <strong>{pesos(Number(monedas) || 0)}</strong>
-            </li>
-          </ul>
-          <div className="contado-total"><span>Contaste</span><strong>{pesos(contado)}</strong></div>
+            </ul>
+          )}
+          {forma === 'billetes' && <div className="contado-total"><span>Contaste</span><strong>{pesos(contado)}</strong></div>}
           <div className="acciones-fila">
             <button type="button" className="boton" onClick={cerrar}>Cancelar</button>
-            <button className="boton boton-primario" onClick={() => setVer(true)}>Listo, ver el resultado</button>
+            <button className="boton boton-primario" disabled={forma === 'total' && total === ''} onClick={() => setVer(true)}>Listo, ver el resultado</button>
           </div>
         </>
       ) : (
